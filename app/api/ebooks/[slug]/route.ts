@@ -1,25 +1,32 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-export async function GET(_req: Request, { params }: { params: { slug: string } }) {
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+type RouteCtx = { params?: { slug?: string } };
+
+export async function GET(_req: Request, ctx: unknown) {
   try {
-    const { data, error } = await admin
-      .from("ebooks")
-      .select("id, slug, title, description, cover_url, price_cents, published")
-      .eq("slug", params.slug)
-      .eq("published", true)
+    const { params } = (ctx as RouteCtx) || {};
+    const slug = params?.slug;
+    if (!slug) {
+      return NextResponse.json({ error: 'Missing slug' }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from('ebooks')
+      .select('*')
+      .eq('slug', slug)
       .maybeSingle();
 
-    if (error) throw error;
-    if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(data);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    return NextResponse.json({ ebook: data }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed" }, { status: 500 });
+    return NextResponse.json({ error: e?.message ?? 'Internal error' }, { status: 500 });
   }
 }
