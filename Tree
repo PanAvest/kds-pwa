@@ -1,0 +1,69 @@
+kds-pwa/
+├─ .env.example
+├─ .gitignore
+├─ eslint.config.mjs
+├─ next-env.d.ts
+├─ next.config.ts
+├─ package.json
+├─ postcss.config.mjs
+├─ tailwind.config.ts
+├─ tsconfig.json
+├─ vercel.json
+├─ README.md
+├─ middleware.ts
+├─ public/
+│  ├─ icon-192.png
+│  ├─ icon-512.png
+│  ├─ manifest.json
+│  ├─ offline.html
+│  ├─ firebase-messaging-sw.js
+│  └─ vendor/pdf.worker.min.mjs
+├─ lib/
+│  ├─ supabaseAdmin.ts
+│  ├─ supabaseClient.ts
+│  └─ types.ts
+├─ utils/
+│  └─ cn.ts
+├─ components/
+│  ├─ AuthForm.tsx
+│  ├─ BottomTabs.tsx
+│  ├─ Header.tsx
+│  ├─ ProgressBar.tsx
+│  └─ ui/
+│     ├─ button.tsx
+│     ├─ card.tsx
+│     ├─ dialog.tsx
+│     ├─ input.tsx
+│     ├─ label.tsx
+│     ├─ sheet.tsx
+│     ├─ skeleton.tsx
+│     ├─ tabs.tsx
+│     └─ toast.tsx
+└─ app/
+   ├─ globals.css
+   ├─ layout.tsx
+   ├─ page.tsx
+   ├─ offline/route.ts
+   ├─ auth/
+   │  ├─ sign-in/page.tsx
+   │  └─ sign-up/page.tsx
+   ├─ courses/
+   │  ├─ page.tsx
+   │  ├─ server-list.tsx
+   │  └─ [slug]/
+   │     ├─ page.tsx
+   │     ├─ enroll/page.tsx
+   │     └─ dashboard/page.tsx
+   ├─ ebooks/
+   │  ├─ page.tsx
+   │  └─ [slug]/page.tsx
+   ├─ notifications/page.tsx
+   └─ api/
+      ├─ public/site-settings/route.ts
+      ├─ secure-pdf/route.ts
+      ├─ push/
+      │  ├─ subscribe/route.ts
+      │  └─ test/route.ts
+      └─ payments/paystack/
+         ├─ init/route.ts
+         └─ verify/route.ts

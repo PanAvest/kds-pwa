@@ -1,0 +1,21 @@
+import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabaseClient";
+
+export async function GET() {
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id, slug, title, price_cents, price, currency, published")
+    .limit(1);
+
+  if (error) {
+    return NextResponse.json({
+      ok: false,
+      error: {
+        message: error.message,
+        details: (error as any).details,
+        hint: (error as any).hint,
+      },
+    });
+  }
+  return NextResponse.json({ ok: true, data });
+}

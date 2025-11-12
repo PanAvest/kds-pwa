@@ -1,0 +1,196 @@
+[Download kds-pwa.zip](sandbox:/mnt/data/kds-pwa.zip)
+
+
+
+# Project tree (condensed)
+
+```
+kds-pwa/
+├─ .env.example
+├─ .gitignore
+├─ eslint.config.mjs
+├─ next-env.d.ts
+├─ next.config.ts
+├─ package.json
+├─ postcss.config.mjs
+├─ tailwind.config.ts
+├─ tsconfig.json
+├─ vercel.json
+├─ README.md
+├─ middleware.ts
+├─ public/
+│  ├─ icon-192.png
+│  ├─ icon-512.png
+│  ├─ manifest.json
+│  ├─ offline.html
+│  ├─ firebase-messaging-sw.js
+│  └─ vendor/pdf.worker.min.mjs
+├─ lib/
+│  ├─ supabaseAdmin.ts
+│  ├─ supabaseClient.ts
+│  └─ types.ts
+├─ utils/
+│  └─ cn.ts
+├─ components/
+│  ├─ AuthForm.tsx
+│  ├─ BottomTabs.tsx
+│  ├─ Header.tsx
+│  ├─ ProgressBar.tsx
+│  └─ ui/
+│     ├─ button.tsx
+│     ├─ card.tsx
+│     ├─ dialog.tsx
+│     ├─ input.tsx
+│     ├─ label.tsx
+│     ├─ sheet.tsx
+│     ├─ skeleton.tsx
+│     ├─ tabs.tsx
+│     └─ toast.tsx
+└─ app/
+   ├─ globals.css
+   ├─ layout.tsx
+   ├─ page.tsx
+   ├─ offline/route.ts
+   ├─ auth/
+   │  ├─ sign-in/page.tsx
+   │  └─ sign-up/page.tsx
+   ├─ courses/
+   │  ├─ page.tsx
+   │  ├─ server-list.tsx
+   │  └─ [slug]/
+   │     ├─ page.tsx
+   │     ├─ enroll/page.tsx
+   │     └─ dashboard/page.tsx
+   ├─ ebooks/
+   │  ├─ page.tsx
+   │  └─ [slug]/page.tsx
+   ├─ notifications/page.tsx
+   └─ api/
+      ├─ public/site-settings/route.ts
+      ├─ secure-pdf/route.ts
+      ├─ push/
+      │  ├─ subscribe/route.ts
+      │  └─ test/route.ts
+      └─ payments/paystack/
+         ├─ init/route.ts
+         └─ verify/route.ts
+```
+
+# README (one page)
+
+**KDS PWA** — Next.js 15 App Router + TypeScript + Tailwind + Supabase + Paystack + FCM (Web Push)
+Mobile-first, native-app look: bottom tabs, card stacks, sticky CTAs, slide-in sheets. Brand tokens strictly applied (no blue).
+
+## 1) Design tokens (global, exact)
+
+In `app/globals.css`:
+
+```css
+:root{
+  --color-bg:#fefdfa; --color-accent-red:#b65437; --color-accent-gold:#f5b750;
+  --color-text-dark:#2c2522; --color-text-muted:#6d7d6f; --color-light:#f3e9e0; --color-soft:#d0c5be;
+  --radius-xl:1rem;
+}
+```
+
+Tailwind maps to these vars only (see `tailwind.config.ts`). Animations include `fade-up`, `float`, `slide-in`.
+
+## 2) Features
+
+* **PWA** via `next-pwa`: offline shell (`/public/offline.html`), `manifest.json`, icons, install prompt handled by browser, background caching of app shell + pages.
+* **Web Push**: Firebase Cloud Messaging (FCM) + Notifications API
+
+  * SW: `public/firebase-messaging-sw.js`
+  * UI: `/notifications` enables + tests
+  * API: `/api/push/subscribe` (upsert stub), `/api/push/test` (server stub)
+* **Supabase** (auth + DB + storage): `lib/supabaseClient.ts` (browser), `lib/supabaseAdmin.ts` (server).
+  Auth flows at `/auth/sign-in`, `/auth/sign-up`; simple dashboard at `/dashboard`.
+* **Payments (Paystack stubs)**:
+
+  * Init: `/api/payments/paystack/init`
+  * Verify: `/api/payments/paystack/verify`
+    `/courses/[slug]/enroll` performs the handoff; on return `?verify=1` runs verify then redirects to course dashboard.
+* **Secure E-Books**: `/ebooks` + `/ebooks/[slug]` requests signed URL from `/api/secure-pdf` and renders via `<iframe>`; copy/print guards in CSS/JS. Replace stub with real signed URL logic.
+* **Mobile-first UI**: bottom tab bar (`components/BottomTabs.tsx`), large touch targets, slide-in sheets, toasts, skeletons.
+
+## 3) Pages (App Router)
+
+* `/` Home (hero, Explore Courses & E-Books CTAs, featured cards)
+* `/courses` (server component list using demo seed if `SEED_DEMO=true`)
+* `/courses/[slug]` (client preview + auth-aware CTA)
+* `/courses/[slug]/enroll` (Paystack handoff)
+* `/courses/[slug]/dashboard` (learning shell + progress demo)
+* `/ebooks` + `/ebooks/[slug]` (catalog + secure viewer)
+* `/auth/sign-in`, `/auth/sign-up` (shared `AuthForm`)
+* `/dashboard` (enrollments placeholder, notifications toggle link)
+* `/notifications` (enable FCM + “Send Test” button)
+* **API**: `/api/public/site-settings`, `/api/secure-pdf`, `/api/push/*`, `/api/payments/paystack/*`
+
+## 4) Environment
+
+Copy `.env.example` → `.env.local` and fill:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+PAYSTACK_SECRET_KEY=
+POST_PAY_REDIRECT_BASE=http://localhost:3000
+
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
+NEXT_PUBLIC_VAPID_KEY=
+
+SEED_DEMO=true
+```
+
+## 5) Run locally (macOS)
+
+```bash
+# Node 18+ recommended
+npm i
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Add to Home Screen for PWA. For push: allow notifications on `/notifications`.
+
+## 6) Production build
+
+```bash
+npm run build
+npm start
+```
+
+## 7) Vercel deploy
+
+* Push repo → “Import Project” in Vercel.
+* Add all `.env` values in Vercel → Project → Settings → Environment Variables.
+* `vercel.json` sets Edge runtime for API routes where sensible.
+* Set `POST_PAY_REDIRECT_BASE` to your production domain.
+* Ensure Service Worker paths (`/firebase-messaging-sw.js`, `/manifest.json`) are accessible.
+
+## 8) Supabase notes
+
+* Create tables per your schema (courses, enrollments, ebooks, etc.).
+* Implement real RLS checks and signed-URL logic in `/api/secure-pdf`.
+* Replace stubs in `/api/push/subscribe` to upsert `{ user_id, endpoint/p256dh/auth }` into `push_subscriptions`.
+
+## 9) Paystack notes
+
+* Replace init/verify stubs with live Paystack API calls using `PAYSTACK_SECRET_KEY`.
+* On successful verify, mark `enrollments.paid=true` for the current user/course in Supabase.
+* Set up a webhook (server-side) for reliability.
+
+## 10) Lighthouse targets
+
+Mobile ≥90 for Performance, PWA, Accessibility, Best Practices, SEO.
+Tips: keep images optimized, avoid layout shift (skeletons in place), stick to brand tokens (no blues).
+
+---
+
+This scaffold mirrors the **browse → enroll/pay → learn → assess → certify** flow and file structure from your KDS documentation while remaining Vercel-ready and production-focused.

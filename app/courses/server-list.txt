@@ -1,0 +1,61 @@
+import Link from "next/link";
+import Image from "next/image";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+
+export const dynamic = "force-dynamic";
+
+export default async function KnowledgeServerList() {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("courses")
+    .select("id,slug,title,description,img,price,cpd_points,published")
+    .eq("published", true)
+    .order("title", { ascending: true });
+
+  if (error) throw error;
+
+  return (
+    <ul className="grid gap-4 sm:grid-cols-2">
+      {(data ?? []).map((c) => (
+        <li key={c.id}>
+          <Link
+            href={`/knowledge/${c.slug}`}
+            className="block rounded-2xl bg-white border border-[color:var(--color-light)] overflow-hidden active:scale-[0.99] transition"
+          >
+            <div className="relative w-full h-40 bg-[color:var(--color-light)]/50">
+              <Image
+                src={c.img || "/project-management.png"}
+                alt={c.title}
+                fill
+                className="object-cover"
+                sizes="(max-width:640px) 100vw, 50vw"
+                priority={false}
+              />
+            </div>
+            <div className="p-4">
+              <h3 className="font-semibold text-[color:var(--color-text-dark)]">
+                {c.title}
+              </h3>
+              {c.description && (
+                <p className="mt-1 text-sm text-[color:var(--color-text-muted)] line-clamp-2">
+                  {c.description}
+                </p>
+              )}
+              <div className="mt-3 text-sm">
+                <span className="font-semibold text-[color:var(--color-text-dark)]">
+                  GH₵{Number(c.price ?? 0).toFixed(2)}
+                </span>
+                <span className="ml-2 text-[color:var(--color-text-muted)]">
+                  · {c.cpd_points ?? 0} CPPD
+                </span>
+              </div>
+            </div>
+          </Link>
+        </li>
+      ))}
+      {(data ?? []).length === 0 && (
+        <li className="text-[color:var(--color-text-muted)]">No items.</li>
+      )}
+    </ul>
+  );
+}
