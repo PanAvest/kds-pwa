@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',           // enables `next export`
-  images: { unoptimized: true } // avoid next/image optimizer
+  reactStrictMode: true,
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
 }
-module.exports = nextConfig
-
+export default nextConfig

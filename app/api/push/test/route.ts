@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 export const runtime = "edge"
 export async function POST(){
   // In production: Use FCM server SDK (or calls through your backend) to send.
