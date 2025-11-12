@@ -1,10 +1,34 @@
-import { cn } from "@/utils/cn"
-import React from "react"
+'use client';
 
-import React from "react"
-export function Tabs({tabs, value, onChange}:{tabs:string[], value:string, onChange:(v:string)=>void}){
-  return <div className="flex gap-2">
-    {tabs.map(t => <button key={t} onClick={()=>onChange(t)} className={cn("px-3 py-2 rounded-xl",
-      value===t ? "bg-[var(--color-accent-gold)] text-[var(--color-text-dark)]" : "bg-[var(--color-light)]")}>{t}</button>)}
-  </div>
+import { cn } from "@/utils/cn";
+
+type TabsProps = {
+  tabs: string[];
+  value: string;
+  onChange: (v: string) => void;
+};
+
+export function Tabs({ tabs, value, onChange }: TabsProps) {
+  return (
+    <div className="w-full">
+      <div className="flex gap-2 border-b border-[var(--color-soft)]">
+        {tabs.map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => onChange(t)}
+            className={cn(
+              "px-3 py-2 text-sm transition-colors",
+              value === t
+                ? "border-b-2 border-[var(--color-primary)] font-semibold text-[var(--color-primary)]"
+                : "text-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+            )}
+            aria-current={value === t ? "page" : undefined}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
