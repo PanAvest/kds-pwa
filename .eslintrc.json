@@ -1,0 +1,45 @@
+{
+  "root": true,
+  "extends": ["next/core-web-vitals"],
+  "plugins": ["react-hooks"],
+  "env": { "es2022": true, "browser": true, "node": true, "worker": true },
+  "ignorePatterns": ["node_modules/", ".next/", "public/", "android/", "ios/"],
+  "overrides": [
+    {
+      "files": ["app/api/**/*", "lib/**", "scripts/**"],
+      "env": { "node": true, "browser": false }
+    },
+    {
+      "files": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
+      "env": { "browser": true, "node": false }
+    }
+  ],
+  "rules": {
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn"
+  },
+  "globals": {
+    "process": "readonly",
+    "Request": "readonly",
+    "Response": "readonly",
+    "Headers": "readonly",
+    "URL": "readonly",
+    "fetch": "readonly",
+    "setTimeout": "readonly",
+    "queueMicrotask": "readonly",
+    "navigator": "readonly",
+    "Notification": "readonly",
+    "window": "readonly",
+    "document": "readonly",
+    "localStorage": "readonly",
+    "HTMLDivElement": "readonly",
+    "HTMLInputElement": "readonly",
+    "HTMLLabelElement": "readonly",
+    "HTMLButtonElement": "readonly",
+    "HTMLVideoElement": "readonly",
+    "ClipboardEvent": "readonly",
+    "MouseEvent": "readonly",
+    "KeyboardEvent": "readonly",
+    "BeforeUnloadEvent": "readonly"
+  }
+}
