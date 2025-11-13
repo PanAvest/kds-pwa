@@ -1,35 +1,31 @@
-import "./globals.css";
-import type { Metadata } from "next";
-import Header from "@/components/Header";
-import { ToastHost } from "@/components/ui/toast";
-import BottomTabs from "@/components/BottomTabs";
+// app/layout.tsx
+import "./globals.css"
+import type { Metadata } from "next"
+import Header from "@/components/Header"
+import { ToastHost } from "@/components/ui/toast"
 
 export const metadata: Metadata = {
   title: "KDS Learning",
   description: "Browse → Enroll → Learn → Assess → Certify",
   manifest: "/manifest.json",
   icons: [{ rel: "icon", url: "/icon-192.png" }]
-};
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        {/* lock viewport so iOS doesn’t zoom/weird scale */}
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-        />
-      </head>
-      <body className="bg-[var(--color-bg)] text-[var(--color-text-dark)]">
+      <body>
+        {/* Web header (still fine for browser / PWA) */}
         <Header />
-        {/* leave space for bottom tabs + safe area */}
-        <main className="min-h-[100dvh] pb-[calc(64px+env(safe-area-inset-bottom))]">
+
+        {/* Main content; mobile app will be inside native header + bottom bar */}
+        <main className="min-h-[100dvh] pb-4">
           {children}
         </main>
-        <BottomTabs />
+
+        {/* No BottomTabs here – nav is handled natively in Xcode for the app */}
         <ToastHost />
       </body>
     </html>
-  );
+  )
 }
