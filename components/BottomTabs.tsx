@@ -19,12 +19,11 @@ export default function BottomTabs() {
         fixed md:hidden left-0 right-0 bottom-0
         border-t border-[var(--color-soft)]
         bg-[var(--color-bg)]
-        pb-[env(safe-area-inset-bottom)]
-        pt-1
         z-50
       "
       style={{
-        paddingBottom: "max(env(safe-area-inset-bottom), 12px)"
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 18px)", // ⬆ EXTRA RAISE
+        paddingTop: "8px"
       }}
     >
       <ul className="grid grid-cols-4">
@@ -40,7 +39,7 @@ export default function BottomTabs() {
                 href={it.href}
                 className={`
                   flex flex-col items-center justify-center
-                  pb-1 pt-1
+                  pt-1 pb-2
                   text-[11px]
                   ${active ? "text-[var(--color-accent-red)]" : "text-gray-600"}
                 `}
