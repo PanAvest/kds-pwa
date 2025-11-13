@@ -14,25 +14,22 @@ class MainViewController: CAPBridgeViewController {
 
     private let statusBarCover = UIView()
     private let headerView    = UIView()
-    private let titleLabel    = UILabel()
     private let bottomBar     = UIView()
     private let tabStack      = UIStackView()
 
     // 0 = Home, 1 = Programs, 2 = E-Books, 3 = Dashboard
     private var currentTab: Int = 0
 
-    // Brand colors (match your CSS)
+    // Brand colors (match CSS)
     private let bgColor    = UIColor(red: 0xFE/255.0, green: 0xFD/255.0, blue: 0xFA/255.0, alpha: 1.0)
     private let textDark   = UIColor(red: 0x2C/255.0, green: 0x25/255.0, blue: 0x22/255.0, alpha: 1.0)
     private let accentRed  = UIColor(red: 0xB6/255.0, green: 0x54/255.0, blue: 0x37/255.0, alpha: 1.0)
     private let softBorder = UIColor(red: 0xD0/255.0, green: 0xC5/255.0, blue: 0xBE/255.0, alpha: 1.0)
 
-    // MARK: - Lifecycle
-
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Force light mode so dark mode doesn't make things black
+        // Force light mode so dark mode never makes top/bottom black
         if #available(iOS 13.0, *) {
             overrideUserInterfaceStyle = .light
         }
@@ -43,14 +40,12 @@ class MainViewController: CAPBridgeViewController {
         setupBottomBar()
         updateTabSelection()
 
-        // Initial insets + behavior
         applyInsetsToWebView()
         injectViewportAndSelectionJS()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Re-inject in case the webview reloaded
         injectViewportAndSelectionJS()
     }
 
@@ -59,12 +54,12 @@ class MainViewController: CAPBridgeViewController {
         applyInsetsToWebView()
     }
 
-    // MARK: - Header + Status Area
+    // MARK: - Top overlay (status + header background, NO text)
 
     private func setupHeader() {
         let safe = view.safeAreaLayoutGuide
 
-        // Cover the area ABOVE the safe area (notch/status bar) with brand color
+        // Covers notch/status area
         statusBarCover.translatesAutoresizingMaskIntoConstraints = false
         statusBarCover.backgroundColor = bgColor
         view.addSubview(statusBarCover)
@@ -76,26 +71,17 @@ class MainViewController: CAPBridgeViewController {
             statusBarCover.bottomAnchor.constraint(equalTo: safe.topAnchor)
         ])
 
-        // Actual header just under the safe area
+        // Simple color band under the notch – no text
         headerView.translatesAutoresizingMaskIntoConstraints = false
         headerView.backgroundColor = bgColor
-
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.text = "KDS Learning"
-        titleLabel.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
-        titleLabel.textColor = textDark
-
-        headerView.addSubview(titleLabel)
         view.addSubview(headerView)
 
         NSLayoutConstraint.activate([
             headerView.topAnchor.constraint(equalTo: safe.topAnchor),
             headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            headerView.heightAnchor.constraint(equalToConstant: 56),
-
-            titleLabel.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16)
+            // 44pt high band – just visual, does NOT push content
+            headerView.heightAnchor.constraint(equalToConstant: 44)
         ])
     }
 
@@ -109,27 +95,31 @@ class MainViewController: CAPBridgeViewController {
 
         view.addSubview(bottomBar)
 
-        // Anchor to the REAL bottom so it covers the home indicator area as well
+        // Attach to the real bottom (covers home indicator / no black gap)
         NSLayoutConstraint.activate([
             bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bottomBar.heightAnchor.constraint(equalToConstant: 64)
+            bottomBar.heightAnchor.constraint(equalToConstant: 80) // a bit taller so icons can sit higher
         ])
 
         tabStack.translatesAutoresizingMaskIntoConstraints = false
         tabStack.axis = .horizontal
         tabStack.distribution = .fillEqually
+        // Padding so labels don’t touch the sides
+        tabStack.isLayoutMarginsRelativeArrangement = true
+        tabStack.layoutMargins = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+
         bottomBar.addSubview(tabStack)
 
         NSLayoutConstraint.activate([
-            tabStack.topAnchor.constraint(equalTo: bottomBar.topAnchor),
-            tabStack.bottomAnchor.constraint(equalTo: bottomBar.bottomAnchor),
+            // Lift content up inside the bar so it sits above iPhone nav/home bar
+            tabStack.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 4),
+            tabStack.bottomAnchor.constraint(equalTo: bottomBar.bottomAnchor, constant: -14),
             tabStack.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor),
             tabStack.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor)
         ])
 
-        // Buttons – icons must exist in Assets.xcassets
         addTabButton(title: "Home",      imageName: "tab-home",      tag: 0)
         addTabButton(title: "Programs",  imageName: "tab-programs",  tag: 1)
         addTabButton(title: "E-Books",   imageName: "tab-ebooks",    tag: 2)
@@ -139,9 +129,8 @@ class MainViewController: CAPBridgeViewController {
     private func addTabButton(title: String, imageName: String, tag: Int) {
         let button = UIButton(type: .system)
         button.tag = tag
-        button.tintColor = softBorder
 
-        // Icon from Assets.xcassets (PNG/SVG catalog as PDF or vector asset)
+        // Try to load icon from Assets.xcassets (must be PNG/PDF, not raw SVG)
         if let icon = UIImage(named: imageName)?.withRenderingMode(.alwaysTemplate) {
             button.setImage(icon, for: .normal)
         }
@@ -149,12 +138,16 @@ class MainViewController: CAPBridgeViewController {
         button.setTitle(title, for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 11, weight: .medium)
 
+        button.tintColor = softBorder
+        button.setTitleColor(UIColor.darkGray, for: .normal)
+
         button.contentHorizontalAlignment = .center
         button.imageView?.contentMode = .scaleAspectFit
 
-        // Icon above, text below
-        button.imageEdgeInsets = UIEdgeInsets(top: -4, left: 0, bottom: 4, right: 0)
-        button.titleEdgeInsets = UIEdgeInsets(top: 24, left: -24, bottom: 0, right: 0)
+        // Vertical layout: icon above, text below, lifted a bit up
+        button.contentEdgeInsets = UIEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
+        button.imageEdgeInsets = UIEdgeInsets(top: -4, left: 0, bottom: 2, right: 0)
+        button.titleEdgeInsets = UIEdgeInsets(top: 26, left: -24, bottom: 0, right: 0)
 
         button.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
         tabStack.addArrangedSubview(button)
@@ -186,32 +179,28 @@ class MainViewController: CAPBridgeViewController {
         bridge?.webView?.evaluateJavaScript(js, completionHandler: nil)
     }
 
-    // MARK: - WebView Insets (no subview re-parenting)
+    // MARK: - WebView Insets: don’t move content down for header
 
     private func applyInsetsToWebView() {
         guard let webView = bridge?.webView as? WKWebView else {
-            print("⚠️ bridge.webView is nil or not WKWebView")
             return
         }
 
-        // Keep our header + nav on top visually
+        // Keep overlays on top visually
         view.bringSubviewToFront(statusBarCover)
         view.bringSubviewToFront(headerView)
         view.bringSubviewToFront(bottomBar)
 
-        // Header height + safe area top
-        let headerHeight: CGFloat = 56 + view.safeAreaInsets.top
-        // Bottom bar height + safe area bottom
-        let bottomHeight: CGFloat = 64 + view.safeAreaInsets.bottom
+        // We only need bottom inset so content doesn’t go under the nav bar.
+        // Top = 0 so header band doesn’t push content down.
+        let bottomInset: CGFloat = 80 + view.safeAreaInsets.bottom
+        let inset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
 
-        let inset = UIEdgeInsets(top: headerHeight, left: 0, bottom: bottomHeight, right: 0)
         webView.scrollView.contentInset = inset
         webView.scrollView.scrollIndicatorInsets = inset
-
-        print("✅ Applied webView insets: \(inset)")
     }
 
-    // MARK: - Disable zoom & selection (mobile-app feel)
+    // MARK: - Disable zoom & text selection
 
     private func injectViewportAndSelectionJS() {
         guard let webView = bridge?.webView as? WKWebView else { return }
@@ -219,7 +208,7 @@ class MainViewController: CAPBridgeViewController {
         let js = """
         (function(){
           try {
-            // Disable zoom (pinch + double tap)
+            // Lock viewport (no pinch / double-tap zoom, no keyboard zoom)
             var meta = document.querySelector('meta[name="viewport"]');
             var content = 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no';
             if (meta) {
@@ -231,7 +220,7 @@ class MainViewController: CAPBridgeViewController {
               document.head.appendChild(meta);
             }
 
-            // Disable text selection / callout
+            // Disable text selection / highlight globally
             var style = document.createElement('style');
             style.innerHTML = `
               * {

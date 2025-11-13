@@ -4,6 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
+import { Button } from "@/components/ui/button"
 
 type Course = {
   id: string
@@ -29,15 +30,21 @@ const BRAND = {
   primary: "#b65437",
 }
 
-const safeSrc = (src?: string | null) => src && src.trim() ? src : "/icon-512.png"
+const safeSrc = (src?: string | null) => (src && src.trim() ? src : "/icon-512.png")
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([])
   const [ebooks, setEbooks] = useState<Ebook[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Auth state for greeting + buttons
+  const [user, setUser] = useState<any>(null)
+  const [fullName, setFullName] = useState<string>("")
+  const nameMissing = !fullName?.trim()
+
   useEffect(() => {
     let alive = true
+
     ;(async () => {
       try {
         const { data: cData } = await supabase
@@ -61,7 +68,56 @@ export default function HomePage() {
         if (alive) setLoading(false)
       }
     })()
-    return () => { alive = false }
+
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Load auth + profile
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadUser() {
+      const { data } = await supabase.auth.getUser()
+      if (cancelled) return
+      const u = data.user ?? null
+      setUser(u)
+
+      if (u?.id) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", u.id)
+          .maybeSingle()
+        if (!cancelled) setFullName((prof?.full_name ?? "").trim())
+      } else {
+        setFullName("")
+      }
+    }
+
+    loadUser()
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (cancelled) return
+      const u = session?.user ?? null
+      setUser(u)
+      if (u?.id) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", u.id)
+          .maybeSingle()
+        if (!cancelled) setFullName((prof?.full_name ?? "").trim())
+      } else {
+        setFullName("")
+      }
+    })
+
+    return () => {
+      cancelled = true
+      sub.subscription.unsubscribe()
+    }
   }, [])
 
   const featured = useMemo(() => courses.slice(0, 6), [courses])
@@ -114,7 +170,54 @@ export default function HomePage() {
         <div className="mx-auto max-w-screen-2xl grid gap-10 lg:grid-cols-[1.08fr_.92fr] items-center">
           {/* Left copy */}
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--color-light)] bg-white/70 px-3 py-1 text-xs">
+            {/* Greeting + Auth buttons (replacing header, above KDS is powered...) */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm sm:text-base font-semibold text-[color:var(--color-text-dark)]">
+                  {user
+                    ? nameMissing
+                      ? "Welcome"
+                      : `Welcome, ${fullName}`
+                    : "Welcome to KDS Learning"}
+                </span>
+                {user && nameMissing && (
+                  <Link
+                    href="/dashboard"
+                    className="text-[12px] text-[color:var(--color-text-muted)]"
+                  >
+                    Add your full name on the Dashboard
+                  </Link>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {user ? (
+                  <Button
+                    variant="outline"
+                    className="text-xs sm:text-sm px-3"
+                    onClick={() => supabase.auth.signOut()}
+                  >
+                    Sign out
+                  </Button>
+                ) : (
+                  <>
+                    <Link href="/auth/sign-in">
+                      <Button variant="outline" className="text-xs sm:text-sm px-3">
+                        Sign In
+                      </Button>
+                    </Link>
+                    <Link href="/auth/sign-up">
+                      <Button className="text-xs sm:text-sm px-3">
+                        Sign Up
+                      </Button>
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* “KDS is powered…” pill */}
+            <span className="mt-4 inline-flex items-center gap-2 rounded-full border border-[color:var(--color-light)] bg-white/70 px-3 py-1 text-xs">
               <span className="h-2 w-2 rounded-full" style={{ background: BRAND.primary }} />
               KDS is powered by <b>PanAvest International &amp; Partners</b>
             </span>
@@ -123,24 +226,11 @@ export default function HomePage() {
               Learn. <span style={{ color: BRAND.primary }}>Assess.</span> Excel.
             </h1>
             <p className="mt-3 sm:mt-4 text-[15px] sm:text-[17px] text-[color:var(--color-text-muted)] max-w-2xl">
-              Certified CPD (CPPD) pathways for modern professionals — industry-aligned modules, interactive assessments, and verifiable certificates.
+              Certified CPD (CPPD) pathways for modern professionals — industry-aligned modules, interactive
+              assessments, and verifiable certificates.
             </p>
 
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link
-                href="/courses"
-                className="rounded-xl text-white px-5 py-3 font-semibold hover:opacity-90 transition"
-                style={{ background: BRAND.primary }}
-              >
-                Explore Knowledge
-              </Link>
-              <Link
-                href="/ebooks"
-                className="rounded-xl px-5 py-3 font-semibold border border-[color:var(--color-soft)] bg-white"
-              >
-                E-Books
-              </Link>
-            </div>
+            {/* CTA buttons removed as requested */}
 
             {/* trust pills */}
             <div className="mt-7 flex flex-wrap items-center gap-3 text-xs text-[color:var(--color-text-muted)]">
@@ -161,13 +251,15 @@ export default function HomePage() {
                 <span className="mt-1 block italic">
                   “What you plant in your mind grows in your life.”
                 </span>
-                <span className="block font-semibold text-[color:var(--color-text-dark)]">— Prof. Douglas Boateng</span>
+                <span className="block font-semibold text-[color:var(--color-text-dark)]">
+                  — Prof. Douglas Boateng
+                </span>
               </blockquote>
             </figure>
           </div>
 
           {/* Right visual */}
-         
+          {/* (add or keep empty as you had before) */}
         </div>
       </section>
 
@@ -183,14 +275,39 @@ export default function HomePage() {
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {[
-              { Icon: Icon.Cap, title: "Certified CPD (CPPD)", text: "Professional knowledge with verifiable certificates." },
-              { Icon: Icon.Beaker, title: "Assessments", text: "Rigorous evaluations that prove capability." },
-              { Icon: Icon.Building, title: "Corporate Training", text: "Tailored programs delivered to teams." },
-              { Icon: Icon.Chart, title: "Career Acceleration", text: "Job-ready, practical skill-building." },
-              { Icon: Icon.Books, title: "Publications", text: "Unique compendiums credited by NaCCA." },
+              {
+                Icon: Icon.Cap,
+                title: "Certified CPD (CPPD)",
+                text: "Professional knowledge with verifiable certificates.",
+              },
+              {
+                Icon: Icon.Beaker,
+                title: "Assessments",
+                text: "Rigorous evaluations that prove capability.",
+              },
+              {
+                Icon: Icon.Building,
+                title: "Corporate Training",
+                text: "Tailored programs delivered to teams.",
+              },
+              {
+                Icon: Icon.Chart,
+                title: "Career Acceleration",
+                text: "Job-ready, practical skill-building.",
+              },
+              {
+                Icon: Icon.Books,
+                title: "Publications",
+                text: "Unique compendiums credited by NaCCA.",
+              },
             ].map((i) => (
-              <div key={i.title} className="rounded-2xl bg-white border border-[color:var(--color-light)] p-5 hover:shadow-sm transition">
-                <div className="text-3xl text-[color:var(--color-text-muted)]"><i.Icon /></div>
+              <div
+                key={i.title}
+                className="rounded-2xl bg-white border border-[color:var(--color-light)] p-5 hover:shadow-sm transition"
+              >
+                <div className="text-3xl text-[color:var(--color-text-muted)]">
+                  <i.Icon />
+                </div>
                 <div className="mt-3 font-semibold">{i.title}</div>
                 <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">{i.text}</p>
               </div>
@@ -262,7 +379,10 @@ export default function HomePage() {
               <h2 className="text-2xl sm:text-3xl font-bold">E-Books</h2>
               <p className="text-sm text-[color:var(--color-text-muted)]">
                 All books are credited by the{" "}
-                <span className="font-semibold">National Council for Curriculum and Assessment (NaCCA) of Ghana</span>.
+                <span className="font-semibold">
+                  National Council for Curriculum and Assessment (NaCCA) of Ghana
+                </span>
+                .
               </p>
             </div>
             <Link href="/ebooks" className="text-sm underline decoration-dotted underline-offset-4">
@@ -343,15 +463,48 @@ export default function HomePage() {
           <h2 className="text-2xl sm:text-3xl font-bold">What professionals say</h2>
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { name: "Dr. Ama Mensah", role: "Supply Chain Executive", org: "Accra, Ghana", quote: "PanAvest’s practical approach to governance and procurement is filling a real skills gap across Africa." },
-              { name: "Michael Ofori", role: "Director, Corporate Governance", org: "Johannesburg, South Africa", quote: "Prof. Boateng’s insights sharpen strategy while grounding teams in measurable execution." },
-              { name: "Nadia Benali", role: "Operations & Projects Lead", org: "Casablanca, Morocco", quote: "The CPPD-aligned learning paths are exactly what our managers needed to level up—fast." },
-              { name: "Kofi Asiedu", role: "Head of Procurement", org: "Kumasi, Ghana", quote: "Clear, rigorous and immediately applicable. We saw better sourcing decisions within weeks." },
-            ].map(r => (
-              <div key={r.name} className="rounded-2xl bg-white border border-[color:var(--color-light)] p-5 hover:shadow-sm transition">
-                <p className="text-sm text-[color:var(--color-text-muted)] leading-relaxed">“{r.quote}”</p>
-                <div className="mt-4 text-sm font-semibold text-[color:var(--color-text-dark)]">{r.name}</div>
-                <div className="text-xs text-[color:var(--color-text-muted)]">{r.role} • {r.org}</div>
+              {
+                name: "Dr. Ama Mensah",
+                role: "Supply Chain Executive",
+                org: "Accra, Ghana",
+                quote:
+                  "PanAvest’s practical approach to governance and procurement is filling a real skills gap across Africa.",
+              },
+              {
+                name: "Michael Ofori",
+                role: "Director, Corporate Governance",
+                org: "Johannesburg, South Africa",
+                quote:
+                  "Prof. Boateng’s insights sharpen strategy while grounding teams in measurable execution.",
+              },
+              {
+                name: "Nadia Benali",
+                role: "Operations & Projects Lead",
+                org: "Casablanca, Morocco",
+                quote:
+                  "The CPPD-aligned learning paths are exactly what our managers needed to level up—fast.",
+              },
+              {
+                name: "Kofi Asiedu",
+                role: "Head of Procurement",
+                org: "Kumasi, Ghana",
+                quote:
+                  "Clear, rigorous and immediately applicable. We saw better sourcing decisions within weeks.",
+              },
+            ].map((r) => (
+              <div
+                key={r.name}
+                className="rounded-2xl bg-white border border-[color:var(--color-light)] p-5 hover:shadow-sm transition"
+              >
+                <p className="text-sm text-[color:var(--color-text-muted)] leading-relaxed">
+                  “{r.quote}”
+                </p>
+                <div className="mt-4 text-sm font-semibold text-[color:var(--color-text-dark)]">
+                  {r.name}
+                </div>
+                <div className="text-xs text-[color:var(--color-text-muted)]">
+                  {r.role} • {r.org}
+                </div>
               </div>
             ))}
           </div>
