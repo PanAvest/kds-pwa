@@ -13,9 +13,16 @@ import WebKit
 class MainViewController: CAPBridgeViewController {
 
     private let statusBarCover = UIView()
-    private let headerView    = UIView()
     private let bottomBar     = UIView()
+    private let bottomBorder  = UIView()
     private let tabStack      = UIStackView()
+
+    // Simple loading overlay
+    private let loadingOverlay = UIView()
+    private let loadingSpinner = UIActivityIndicatorView(style: .medium)
+
+    // Track if we've attached the webview observer
+    private var observingWebViewProgress = false
 
     // 0 = Home, 1 = Programs, 2 = E-Books, 3 = Dashboard
     private var currentTab: Int = 0
@@ -25,6 +32,8 @@ class MainViewController: CAPBridgeViewController {
     private let textDark   = UIColor(red: 0x2C/255.0, green: 0x25/255.0, blue: 0x22/255.0, alpha: 1.0)
     private let accentRed  = UIColor(red: 0xB6/255.0, green: 0x54/255.0, blue: 0x37/255.0, alpha: 1.0)
     private let softBorder = UIColor(red: 0xD0/255.0, green: 0xC5/255.0, blue: 0xBE/255.0, alpha: 1.0)
+
+    private let bottomBarHeight: CGFloat = 90.0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -36,10 +45,11 @@ class MainViewController: CAPBridgeViewController {
 
         view.backgroundColor = bgColor
 
-        setupHeader()
+        setupStatusBarBackground()
         setupBottomBar()
-        updateTabSelection()
+        setupLoadingOverlay()
 
+        updateTabSelection()
         applyInsetsToWebView()
         injectViewportAndSelectionJS()
     }
@@ -47,6 +57,7 @@ class MainViewController: CAPBridgeViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         injectViewportAndSelectionJS()
+        setupWebViewProgressObserver()
     }
 
     override func viewSafeAreaInsetsDidChange() {
@@ -54,12 +65,18 @@ class MainViewController: CAPBridgeViewController {
         applyInsetsToWebView()
     }
 
-    // MARK: - Top overlay (status + header background, NO text)
+    deinit {
+        // Clean up observer
+        if observingWebViewProgress, let webView = bridge?.webView as? WKWebView {
+            webView.removeObserver(self, forKeyPath: "estimatedProgress")
+        }
+    }
 
-    private func setupHeader() {
+    // MARK: - Top background (only behind notch / status bar)
+
+    private func setupStatusBarBackground() {
         let safe = view.safeAreaLayoutGuide
 
-        // Covers notch/status area
         statusBarCover.translatesAutoresizingMaskIntoConstraints = false
         statusBarCover.backgroundColor = bgColor
         view.addSubview(statusBarCover)
@@ -70,19 +87,6 @@ class MainViewController: CAPBridgeViewController {
             statusBarCover.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             statusBarCover.bottomAnchor.constraint(equalTo: safe.topAnchor)
         ])
-
-        // Simple color band under the notch – no text
-        headerView.translatesAutoresizingMaskIntoConstraints = false
-        headerView.backgroundColor = bgColor
-        view.addSubview(headerView)
-
-        NSLayoutConstraint.activate([
-            headerView.topAnchor.constraint(equalTo: safe.topAnchor),
-            headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            // 44pt high band – just visual, does NOT push content
-            headerView.heightAnchor.constraint(equalToConstant: 44)
-        ])
     }
 
     // MARK: - Bottom Nav
@@ -90,81 +94,121 @@ class MainViewController: CAPBridgeViewController {
     private func setupBottomBar() {
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.backgroundColor = .white
-        bottomBar.layer.borderColor = softBorder.cgColor
-        bottomBar.layer.borderWidth = 0.5
+        bottomBar.clipsToBounds = true   // prevent icons bleeding out of the bar
 
         view.addSubview(bottomBar)
 
-        // Attach to the real bottom (covers home indicator / no black gap)
         NSLayoutConstraint.activate([
-            bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bottomBar.heightAnchor.constraint(equalToConstant: 80) // a bit taller so icons can sit higher
+            bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            bottomBar.heightAnchor.constraint(equalToConstant: bottomBarHeight)
+        ])
+
+        // Top divider line
+        bottomBorder.translatesAutoresizingMaskIntoConstraints = false
+        bottomBorder.backgroundColor = softBorder
+        bottomBar.addSubview(bottomBorder)
+
+        NSLayoutConstraint.activate([
+            bottomBorder.topAnchor.constraint(equalTo: bottomBar.topAnchor),
+            bottomBorder.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor),
+            bottomBorder.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor),
+            bottomBorder.heightAnchor.constraint(equalToConstant: 0.5)
         ])
 
         tabStack.translatesAutoresizingMaskIntoConstraints = false
         tabStack.axis = .horizontal
         tabStack.distribution = .fillEqually
-        // Padding so labels don’t touch the sides
+        tabStack.alignment = .fill
         tabStack.isLayoutMarginsRelativeArrangement = true
-        tabStack.layoutMargins = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        // little padding so content sits nicely inside the bar
+        tabStack.layoutMargins = UIEdgeInsets(top: 4, left: 8, bottom: 6, right: 8)
 
         bottomBar.addSubview(tabStack)
 
         NSLayoutConstraint.activate([
-            // Lift content up inside the bar so it sits above iPhone nav/home bar
-            tabStack.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 4),
-            tabStack.bottomAnchor.constraint(equalTo: bottomBar.bottomAnchor, constant: -14),
+            tabStack.topAnchor.constraint(equalTo: bottomBorder.bottomAnchor),
+            tabStack.bottomAnchor.constraint(equalTo: bottomBar.bottomAnchor),
             tabStack.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor),
             tabStack.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor)
         ])
 
-        addTabButton(title: "Home",      imageName: "tab-home",      tag: 0)
-        addTabButton(title: "Programs",  imageName: "tab-programs",  tag: 1)
-        addTabButton(title: "E-Books",   imageName: "tab-ebooks",    tag: 2)
-        addTabButton(title: "Dashboard", imageName: "tab-dashboard", tag: 3)
+        addTab(title: "Home",      imageName: "tab-home",      tag: 0)
+        addTab(title: "Programs",  imageName: "tab-programs",  tag: 1)
+        addTab(title: "E-Books",   imageName: "tab-ebooks",    tag: 2)
+        addTab(title: "Dashboard", imageName: "tab-dashboard", tag: 3)
     }
 
-    private func addTabButton(title: String, imageName: String, tag: Int) {
-        let button = UIButton(type: .system)
-        button.tag = tag
+    /// Creates a tab item with icon above label, centered.
+    /// Whole control is tappable; inner stack does not intercept touches.
+    private func addTab(title: String, imageName: String, tag: Int) {
+        let tabControl = UIControl()
+        tabControl.tag = tag
 
-        // Try to load icon from Assets.xcassets (must be PNG/PDF, not raw SVG)
+        let vStack = UIStackView()
+        vStack.axis = .vertical
+        vStack.alignment = .center
+        vStack.spacing = 2
+        vStack.translatesAutoresizingMaskIntoConstraints = false
+        vStack.isUserInteractionEnabled = false // let the UIControl handle all touches
+
+        // Icon
+        let imageView = UIImageView()
         if let icon = UIImage(named: imageName)?.withRenderingMode(.alwaysTemplate) {
-            button.setImage(icon, for: .normal)
+            imageView.image = icon
         }
+        imageView.tintColor = softBorder
+        imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            imageView.widthAnchor.constraint(equalToConstant: 22),
+            imageView.heightAnchor.constraint(equalToConstant: 22)
+        ])
 
-        button.setTitle(title, for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 11, weight: .medium)
+        // Label
+        let label = UILabel()
+        label.text = title
+        label.font = UIFont.systemFont(ofSize: 11, weight: .medium)
+        label.textColor = UIColor.darkGray
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        button.tintColor = softBorder
-        button.setTitleColor(UIColor.darkGray, for: .normal)
+        vStack.addArrangedSubview(imageView)
+        vStack.addArrangedSubview(label)
 
-        button.contentHorizontalAlignment = .center
-        button.imageView?.contentMode = .scaleAspectFit
+        tabControl.addSubview(vStack)
+        NSLayoutConstraint.activate([
+            vStack.centerXAnchor.constraint(equalTo: tabControl.centerXAnchor),
+            vStack.centerYAnchor.constraint(equalTo: tabControl.centerYAnchor)
+        ])
 
-        // Vertical layout: icon above, text below, lifted a bit up
-        button.contentEdgeInsets = UIEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
-        button.imageEdgeInsets = UIEdgeInsets(top: -4, left: 0, bottom: 2, right: 0)
-        button.titleEdgeInsets = UIEdgeInsets(top: 26, left: -24, bottom: 0, right: 0)
-
-        button.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
-        tabStack.addArrangedSubview(button)
+        tabControl.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
+        tabStack.addArrangedSubview(tabControl)
     }
 
     private func updateTabSelection() {
-        for case let button as UIButton in tabStack.arrangedSubviews {
-            let isActive = (button.tag == currentTab)
+        for case let control as UIControl in tabStack.arrangedSubviews {
+            let isActive = (control.tag == currentTab)
             let color = isActive ? accentRed : UIColor.darkGray
-            button.setTitleColor(color, for: .normal)
-            button.tintColor = color
+
+            if let stack = control.subviews.first as? UIStackView {
+                if let imageView = stack.arrangedSubviews.first as? UIImageView {
+                    imageView.tintColor = color
+                }
+                if stack.arrangedSubviews.count > 1,
+                   let label = stack.arrangedSubviews[1] as? UILabel {
+                    label.textColor = color
+                }
+            }
         }
     }
 
-    @objc private func tabTapped(_ sender: UIButton) {
+    @objc private func tabTapped(_ sender: UIControl) {
         currentTab = sender.tag
         updateTabSelection()
+        showLoadingOverlay()  // show immediately on tab tap
 
         let path: String
         switch sender.tag {
@@ -177,9 +221,46 @@ class MainViewController: CAPBridgeViewController {
 
         let js = "window.location.href = '\(path)';"
         bridge?.webView?.evaluateJavaScript(js, completionHandler: nil)
+        // Hiding is handled by webView progress observer now
     }
 
-    // MARK: - WebView Insets: don’t move content down for header
+    // MARK: - Loading overlay
+
+    private func setupLoadingOverlay() {
+        loadingOverlay.translatesAutoresizingMaskIntoConstraints = false
+        loadingOverlay.backgroundColor = UIColor(white: 1.0, alpha: 0.6)
+        loadingOverlay.isHidden = true
+
+        loadingSpinner.translatesAutoresizingMaskIntoConstraints = false
+        loadingSpinner.hidesWhenStopped = true
+
+        loadingOverlay.addSubview(loadingSpinner)
+        view.addSubview(loadingOverlay)
+
+        NSLayoutConstraint.activate([
+            loadingOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            loadingOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            loadingOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loadingOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            loadingSpinner.centerXAnchor.constraint(equalTo: loadingOverlay.centerXAnchor),
+            loadingSpinner.centerYAnchor.constraint(equalTo: loadingOverlay.centerYAnchor)
+        ])
+    }
+
+    private func showLoadingOverlay() {
+        loadingOverlay.isHidden = false
+        loadingSpinner.startAnimating()
+        view.bringSubviewToFront(loadingOverlay)
+        view.bringSubviewToFront(bottomBar)  // keep nav above the overlay
+    }
+
+    private func hideLoadingOverlay() {
+        loadingSpinner.stopAnimating()
+        loadingOverlay.isHidden = true
+    }
+
+    // MARK: - WebView Insets: keep content above bottom nav, no extra top gap
 
     private func applyInsetsToWebView() {
         guard let webView = bridge?.webView as? WKWebView else {
@@ -188,19 +269,49 @@ class MainViewController: CAPBridgeViewController {
 
         // Keep overlays on top visually
         view.bringSubviewToFront(statusBarCover)
-        view.bringSubviewToFront(headerView)
         view.bringSubviewToFront(bottomBar)
+        view.bringSubviewToFront(loadingOverlay)
 
-        // We only need bottom inset so content doesn’t go under the nav bar.
-        // Top = 0 so header band doesn’t push content down.
-        let bottomInset: CGFloat = 80 + view.safeAreaInsets.bottom
+        let bottomInset: CGFloat = bottomBarHeight + view.safeAreaInsets.bottom
         let inset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
 
         webView.scrollView.contentInset = inset
         webView.scrollView.scrollIndicatorInsets = inset
     }
 
-    // MARK: - Disable zoom & text selection
+    // MARK: - Observe WKWebView progress to show/hide loader for ALL navigations
+
+    private func setupWebViewProgressObserver() {
+        guard !observingWebViewProgress,
+              let webView = bridge?.webView as? WKWebView else {
+            return
+        }
+
+        observingWebViewProgress = true
+        webView.addObserver(self, forKeyPath: "estimatedProgress", options: [.new], context: nil)
+    }
+
+    override func observeValue(
+        forKeyPath keyPath: String?,
+        of object: Any?,
+        change: [NSKeyValueChangeKey : Any]?,
+        context: UnsafeMutableRawPointer?
+    ) {
+        if keyPath == "estimatedProgress",
+           let webView = object as? WKWebView {
+            let progress = webView.estimatedProgress
+            // When progress starts (<1) show loader, when it completes, hide
+            if progress < 1.0 {
+                showLoadingOverlay()
+            } else {
+                hideLoadingOverlay()
+            }
+        } else {
+            super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
+        }
+    }
+
+    // MARK: - Disable zoom, tap highlight & text selection (except inputs)
 
     private func injectViewportAndSelectionJS() {
         guard let webView = bridge?.webView as? WKWebView else { return }
@@ -220,17 +331,23 @@ class MainViewController: CAPBridgeViewController {
               document.head.appendChild(meta);
             }
 
-            // Disable text selection / highlight globally
+            // Global "app-like" CSS: no highlight, no selection, no long-press menu
             var style = document.createElement('style');
             style.innerHTML = `
+              html, body {
+                overscroll-behavior: none;
+                touch-action: manipulation;
+              }
               * {
                 -webkit-user-select: none !important;
                 -webkit-touch-callout: none !important;
                 user-select: none !important;
+                -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
               }
               input, textarea, [contenteditable="true"] {
                 -webkit-user-select: auto !important;
                 user-select: auto !important;
+                -webkit-touch-callout: default !important;
               }
             `;
             document.head.appendChild(style);
@@ -243,4 +360,3 @@ class MainViewController: CAPBridgeViewController {
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 }
- 

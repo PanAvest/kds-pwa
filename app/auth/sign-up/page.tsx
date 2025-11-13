@@ -1,17 +1,23 @@
+// app/auth/sign-up/page.tsx
 import Image from "next/image"
 import Link from "next/link"
 import AuthForm from "@/components/AuthForm"
 
+/**
+ * App-like layout:
+ * - No scrolling, full-screen container
+ * - Hero + overlapping card
+ * - no-copy to block text selection / copy
+ */
 export default function SignUpPage() {
   return (
-    <div className="fixed inset-0 overflow-hidden bg-[var(--color-bg)]">
+    <div className="fixed inset-0 overflow-hidden bg-[var(--color-bg)] no-copy">
       {/* Top brand hero */}
       <div
         className="relative h-[38vh] min-h-[220px] bg-[var(--color-primary)] text-white rounded-b-[28px] flex items-center justify-center px-6"
         style={{ ["--color-primary" as any]: "#b65437" }}
       >
         <div className="flex flex-col items-center">
-        
           <h1 className="text-2xl font-bold leading-tight">Create Account</h1>
           <p className="text-sm opacity-90 mt-1 text-center max-w-[300px]">
             Join KDS Learning to access courses and e-books with secure reader.

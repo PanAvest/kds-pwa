@@ -12,20 +12,22 @@ export const metadata: Metadata = {
     width: "device-width",
     initialScale: 1,
     maximumScale: 1,
-    userScalable: false, // disable zoom on inputs / pinch zoom
+    minimumScale: 1,
+    userScalable: false, // disable pinch + double-tap zoom
+    viewportFit: "cover", // fill iPhone safe areas like a real app
   },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-[var(--color-bg)]">
+      {/* no-copy keeps the whole app non-selectable / non-copyable */}
+      <body className="bg-[var(--color-bg)] no-copy">
         {/* Main content; mobile app will be inside native header + bottom bar */}
         <main className="min-h-[100dvh] pb-4">
           {children}
         </main>
 
-        {/* No BottomTabs here – nav is handled natively in Xcode for the app */}
         <ToastHost />
       </body>
     </html>

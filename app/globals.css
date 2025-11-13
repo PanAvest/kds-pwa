@@ -19,6 +19,7 @@
 /* Base reset */
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent; /* no blue tap flash */
 }
 
 /* Make the app fill the screen and respect safe areas */
@@ -30,12 +31,25 @@ body {
   background: var(--color-bg);
   color: var(--color-text-dark);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-  overscroll-behavior-y: none; /* reduce bounce */
+  overscroll-behavior-y: none;       /* reduce bounce */
+  touch-action: manipulation;        /* no double-tap zoom */
+  -webkit-text-size-adjust: 100%;    /* stop iOS from auto-zooming text */
 }
 
-/* Disable blue tap highlight & “webby” feel */
-* {
-  -webkit-tap-highlight-color: transparent;
+/* Disable copy/select for the whole app by default */
+body.no-copy {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow normal interaction for form fields BUT prevent iOS zoom by using >=16px font */
+input,
+textarea,
+select,
+button {
+  font-size: 16px !important; /* critical: stops iPhone from zooming when typing */
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Links use app colors */
@@ -58,7 +72,7 @@ a {
   100% { transform: translateY(0); }
 }
 
-/* Utility: disable copy/print */
+/* Utility: disable copy/print on specific elements if needed */
 .no-copy {
   -webkit-user-select: none;
   user-select: none;
