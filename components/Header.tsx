@@ -1,64 +1,72 @@
-"use client"
-import React from "react"
-import Link from "next/link"
-import { supabase } from "@/lib/supabaseClient"
-import { Button } from "@/components/ui/button"
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
+import { Button } from "@/components/ui/button";
 
 export default function Header() {
-  const [user, setUser] = React.useState<any>(null)
-  const [fullName, setFullName] = React.useState<string>("")
-  const nameMissing = !fullName?.trim()
+  const [user, setUser] = React.useState<any>(null);
+  const [fullName, setFullName] = React.useState<string>("");
+
+  const nameMissing = !fullName?.trim();
 
   React.useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     async function load() {
-      const { data } = await supabase.auth.getUser()
-      if (cancelled) return
-      const u = data.user ?? null
-      setUser(u)
+      const { data } = await supabase.auth.getUser();
+      if (cancelled) return;
+
+      const u = data.user ?? null;
+      setUser(u);
 
       if (u?.id) {
         const { data: prof } = await supabase
           .from("profiles")
           .select("full_name")
           .eq("id", u.id)
-          .maybeSingle()
-        if (!cancelled) setFullName((prof?.full_name ?? "").trim())
-      } else setFullName("")
+          .maybeSingle();
+
+        if (!cancelled) {
+          setFullName((prof?.full_name ?? "").trim());
+        }
+      } else {
+        setFullName("");
+      }
     }
 
-    load()
+    load();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_e, s) => {
-      if (cancelled) return
-      const u = s?.user ?? null
-      setUser(u)
+      if (cancelled) return;
+
+      const u = s?.user ?? null;
+      setUser(u);
+
       if (u?.id) {
         const { data: prof } = await supabase
           .from("profiles")
           .select("full_name")
           .eq("id", u.id)
-          .maybeSingle()
-        if (!cancelled) setFullName((prof?.full_name ?? "").trim())
-      } else setFullName("")
-    })
+          .maybeSingle();
+
+        if (!cancelled) {
+          setFullName((prof?.full_name ?? "").trim());
+        }
+      } else {
+        setFullName("");
+      }
+    });
 
     return () => {
-      cancelled = true
-      sub.subscription.unsubscribe()
-    }
-  }, [])
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   return (
-    <header
-      className="
-        bg-[var(--color-bg)]
-        px-4 py-3
-        pt-safe-top
-      "
-      // removed sticky & top-0
-    >
+    <header className="bg-[var(--color-bg)] px-4 py-3">
       <div className="flex items-center justify-between">
         {/* Left: Welcome text */}
         <div className="flex flex-col leading-tight">
@@ -73,14 +81,14 @@ export default function Header() {
           {user && nameMissing && (
             <Link
               href="/dashboard"
-              className="text-[12px] text-muted"
+              className="text-[12px] text-[var(--color-text-muted)]"
             >
               Add your full name on the Dashboard
             </Link>
           )}
         </div>
 
-        {/* Buttons */}
+        {/* Right: Auth buttons */}
         <div className="flex items-center gap-2">
           {user ? (
             <Button
@@ -105,5 +113,5 @@ export default function Header() {
         </div>
       </div>
     </header>
-  )
+  );
 }
