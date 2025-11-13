@@ -12,52 +12,72 @@
   --color-soft:#d0c5be;
   --radius-xl:1rem;
 
-  /* 👇 Tell the browser: this app is LIGHT mode only */
+  /* Force the app to behave as LIGHT mode only */
   color-scheme: light;
 }
 
-* { box-sizing:border-box }
+* {
+  box-sizing: border-box;
+}
 
 html,
 body {
-  height:100%;
-  background:var(--color-bg);
+  height: 100%;
+  background: var(--color-bg);
 }
 
 body {
-  color:var(--color-text-dark);
-  font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  color: var(--color-text-dark);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
 }
 
 a {
-  color:inherit;
-  text-decoration:none;
+  color: inherit;
+  text-decoration: none;
 }
 
 @keyframes fade-up {
-  0% { opacity:0; transform:translateY(10px) }
-  100% { opacity:1; transform:translateY(0) }
-}
-@keyframes float {
-  0%,100% { transform:translateY(0) }
-  50% { transform:translateY(-4px) }
-}
-@keyframes slide-in {
-  0% { transform:translateY(100%) }
-  100% { transform:translateY(0) }
-}
-
-.no-copy {
-  -webkit-user-select:none;
-  user-select:none;
-}
-.no-print {
-  @media print {
-    display:none !important;
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-/* 👇 If the device is in dark mode, FORCE our light palette */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes slide-in {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.no-copy {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.no-print {
+  @media print {
+    display: none !important;
+  }
+}
+
+/* If device is in dark mode, still use our light palette */
 @media (prefers-color-scheme: dark) {
   html,
   body {
