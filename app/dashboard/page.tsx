@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import BottomTabs from "@/components/BottomTabs";
+
 import { ProgressBar } from "@/components/ProgressBar";
 
 /* Types */
@@ -305,7 +305,7 @@ export default function DashboardPage() {
         <main className="mx-auto max-w-screen-md px-4 py-6">
           <p className="text-sm text-muted">Checking your session…</p>
         </main>
-        <BottomTabs />
+
       </div>
     );
   }
@@ -495,7 +495,7 @@ export default function DashboardPage() {
         <div className="h-[80px]" />
       </main>
 
-      <BottomTabs />
+      
     </div>
   );
 }
