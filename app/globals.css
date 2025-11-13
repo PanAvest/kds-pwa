@@ -85,3 +85,27 @@ a {
     color: var(--color-text-dark) !important;
   }
 }
+
+html {
+  -webkit-text-size-adjust: 100% !important; /* iOS Safari stops enlarging text */
+  touch-action: manipulation; /* disables double-tap zoom */
+}
+
+body {
+  overscroll-behavior: none; /* prevents weird bounce highflying */
+}
+
+/* Disable callout highlights, selections, etc */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Disable long-press text selection */
+.no-select, body, html {
+  user-select: none;
+}
+
+* {
+  touch-action: pan-x pan-y; /* no double-tap zoom */
+}
