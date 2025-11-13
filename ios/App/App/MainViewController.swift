@@ -243,3 +243,4 @@ class MainViewController: CAPBridgeViewController {
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 }
+ 
