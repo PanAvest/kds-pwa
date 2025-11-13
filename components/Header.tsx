@@ -51,7 +51,14 @@ export default function Header() {
   }, [])
 
   return (
-    <header className="sticky top-0 z-40 bg-[var(--color-bg)] px-4 py-3">
+    <header
+      className="
+        bg-[var(--color-bg)]
+        px-4 py-3
+        pt-safe-top
+      "
+      // removed sticky & top-0
+    >
       <div className="flex items-center justify-between">
         {/* Left: Welcome text */}
         <div className="flex flex-col leading-tight">
@@ -62,18 +69,18 @@ export default function Header() {
                 : `Welcome, ${fullName}`
               : "Welcome to KDS Learning"}
           </span>
+
           {user && nameMissing && (
             <Link
               href="/dashboard"
               className="text-[12px] text-muted"
-              title="Set your display name"
             >
               Add your full name on the Dashboard
             </Link>
           )}
         </div>
 
-        {/* Right: Auth buttons */}
+        {/* Buttons */}
         <div className="flex items-center gap-2">
           {user ? (
             <Button
