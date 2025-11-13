@@ -2,6 +2,7 @@
 import "./globals.css"
 import type { Metadata } from "next"
 import { ToastHost } from "@/components/ui/toast"
+import LoadingOverlay from "@/components/LoadingOverlay"
 
 export const metadata: Metadata = {
   title: "KDS Learning",
@@ -13,33 +14,25 @@ export const metadata: Metadata = {
     initialScale: 1,
     maximumScale: 1,
     minimumScale: 1,
-    userScalable: false, // disable pinch + double-tap zoom
-    viewportFit: "cover", // fill iPhone safe areas like a real app
+    userScalable: false,   // disable zoom on inputs / pinch zoom
+    viewportFit: "cover",  // fill iPhone safe areas like a real app
   },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      {/* no-copy keeps the whole app non-selectable / non-copyable */}
+      {/* no-copy keeps whole app non-selectable / non-copyable (set in globals.css) */}
       <body className="bg-[var(--color-bg)] no-copy">
+        {/* GLOBAL LOADING FADE, like MainViewController.swift */}
+        <LoadingOverlay />
+
         {/* Main content; mobile app will be inside native header + bottom bar */}
         <main className="min-h-[100dvh] pb-4">
           {children}
         </main>
 
         <ToastHost />
-
-        <script
-  dangerouslySetInnerHTML={{
-    __html: `
-      document.addEventListener("click", () => {
-        if (navigator?.vibrate) navigator.vibrate(7);
-      });
-    `,
-  }}
-/>
-
       </body>
     </html>
   )

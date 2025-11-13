@@ -1,4 +1,3 @@
-// app/auth/sign-in/page.tsx
 import Image from "next/image"
 import Link from "next/link"
 import AuthForm from "@/components/AuthForm"
@@ -29,11 +28,17 @@ export default function SignInPage() {
       {/* Centered card */}
       <div className="absolute left-0 right-0 top-[34vh] px-5">
         <div className="mx-auto w-full max-w-[420px] bg-white rounded-2xl shadow-xl border border-[var(--color-light)] p-6">
+          {/* Form submit will automatically trigger global overlay */}
           <AuthForm mode="sign-in" />
 
           <p className="mt-5 text-sm text-center text-muted">
             Don’t have an account?{" "}
-            <Link href="/auth/sign-up" className="font-medium" style={{ color: "#0a1156" }}>
+            <Link
+              href="/auth/sign-up"
+              data-kds-loading   // <— show loading fade on tap
+              className="font-medium"
+              style={{ color: "#0a1156" }}
+            >
               Create one
             </Link>
           </p>

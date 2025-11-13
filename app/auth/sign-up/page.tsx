@@ -1,14 +1,7 @@
-// app/auth/sign-up/page.tsx
 import Image from "next/image"
 import Link from "next/link"
 import AuthForm from "@/components/AuthForm"
 
-/**
- * App-like layout:
- * - No scrolling, full-screen container
- * - Hero + overlapping card
- * - no-copy to block text selection / copy
- */
 export default function SignUpPage() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-[var(--color-bg)] no-copy">
@@ -32,7 +25,12 @@ export default function SignUpPage() {
 
           <p className="mt-5 text-sm text-center text-muted">
             Already have an account?{" "}
-            <Link href="/auth/sign-in" className="font-medium" style={{ color: "#0a1156" }}>
+            <Link
+              href="/auth/sign-in"
+              data-kds-loading   // <— show loading fade on tap
+              className="font-medium"
+              style={{ color: "#0a1156" }}
+            >
               Sign in
             </Link>
           </p>

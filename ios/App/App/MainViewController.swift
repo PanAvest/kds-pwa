@@ -33,7 +33,7 @@ class MainViewController: CAPBridgeViewController {
     private let accentRed  = UIColor(red: 0xB6/255.0, green: 0x54/255.0, blue: 0x37/255.0, alpha: 1.0)
     private let softBorder = UIColor(red: 0xD0/255.0, green: 0xC5/255.0, blue: 0xBE/255.0, alpha: 1.0)
 
-    private let bottomBarHeight: CGFloat = 90.0
+    private let bottomBarHeight: CGFloat = 100.0
 
     override func viewDidLoad() {
         super.viewDidLoad()
