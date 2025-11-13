@@ -12,100 +12,80 @@
   --color-soft:#d0c5be;
   --radius-xl:1rem;
 
-  /* Force the app to behave as LIGHT mode only */
+  /* Force LIGHT mode only */
   color-scheme: light;
+
+  /* Prevent iOS from auto "helpfully" resizing text */
+  -webkit-text-size-adjust: 100%;
 }
 
 * {
-  box-sizing: border-box;
+  box-sizing:border-box;
 }
 
 html,
 body {
-  height: 100%;
-  background: var(--color-bg);
+  height:100%;
+  background:var(--color-bg);
 }
 
 body {
-  color: var(--color-text-dark);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  color:var(--color-text-dark);
+  font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
 }
 
 a {
-  color: inherit;
-  text-decoration: none;
+  color:inherit;
+  text-decoration:none;
 }
 
+/* 🔒 Stop iOS from zooming inputs when focused.
+   iOS only auto-zooms if font-size < 16px. */
+input,
+textarea,
+select,
+button {
+  font-size:16px !important;
+}
+
+/* Optional: tighten up form look */
+input,
+textarea,
+select {
+  background-color:#fff;
+  color:var(--color-text-dark);
+}
+
+/* Animations */
 @keyframes fade-up {
-  0% {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  0% { opacity:0; transform:translateY(10px); }
+  100% { opacity:1; transform:translateY(0); }
 }
-
 @keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
+  0%,100% { transform:translateY(0); }
+  50% { transform:translateY(-4px); }
 }
-
 @keyframes slide-in {
-  0% {
-    transform: translateY(100%);
-  }
-  100% {
-    transform: translateY(0);
-  }
+  0% { transform:translateY(100%); }
+  100% { transform:translateY(0); }
 }
 
+/* Utility classes */
 .no-copy {
-  -webkit-user-select: none;
-  user-select: none;
+  -webkit-user-select:none;
+  user-select:none;
 }
-
 .no-print {
   @media print {
-    display: none !important;
+    display:none !important;
   }
 }
 
-/* If device is in dark mode, still use our light palette */
+/* Even if device is in dark mode, stay on our light palette */
 @media (prefers-color-scheme: dark) {
   html,
   body {
     background: var(--color-bg) !important;
     color: var(--color-text-dark) !important;
   }
-}
-
-html {
-  -webkit-text-size-adjust: 100% !important; /* iOS Safari stops enlarging text */
-  touch-action: manipulation; /* disables double-tap zoom */
-}
-
-body {
-  overscroll-behavior: none; /* prevents weird bounce highflying */
-}
-
-/* Disable callout highlights, selections, etc */
-* {
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-}
-
-/* Disable long-press text selection */
-.no-select, body, html {
-  user-select: none;
-}
-
-* {
-  touch-action: pan-x pan-y; /* no double-tap zoom */
 }
