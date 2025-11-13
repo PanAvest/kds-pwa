@@ -29,6 +29,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </main>
 
         <ToastHost />
+
+        <script
+  dangerouslySetInnerHTML={{
+    __html: `
+      document.addEventListener("click", () => {
+        if (navigator?.vibrate) navigator.vibrate(7);
+      });
+    `,
+  }}
+/>
+
       </body>
     </html>
   )
