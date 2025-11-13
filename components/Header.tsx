@@ -1,5 +1,11 @@
 "use client";
 
-export default function Header() {
-  return null;
+export default function HeaderSpacer() {
+  return (
+    <div
+      className="
+        pt-[max(env(safe-area-inset-top),0.75rem)]
+      "
+    />
+  );
 }
