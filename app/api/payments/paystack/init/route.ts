@@ -17,6 +17,7 @@ export async function POST(req: Request) {
     const secret = process.env.PAYSTACK_SECRET_KEY!;
     const base =
       process.env.POST_PAY_REDIRECT_BASE ||
+      process.env.NEXT_PUBLIC_APP_URL ||
       process.env.PUBLIC_WEB_BASE_URL ||
       process.env.NEXT_PUBLIC_SITE_URL ||
       "http://localhost:3000";

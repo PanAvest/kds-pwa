@@ -233,7 +233,8 @@ export default function EbookDetailPage() {
       });
       const data = await res.json();
       if (!res.ok || !data?.authorization_url) throw new Error(data?.error || "Failed to initialize payment.");
-      window.location.href = data.authorization_url;
+      // Use replace to avoid opening a new tab and return back into the app domain
+      window.location.replace(data.authorization_url as string);
     } catch (e) {
       setErr((e as Error).message || "Payment init failed");
       setBuying(false);

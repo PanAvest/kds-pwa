@@ -121,8 +121,8 @@ export default function EnrollPage() {
         setNotice(data?.error || "Failed to initialize payment.");
         return;
       }
-      // Open in new tab (mobile-friendly) and keep current page as fallback
-      window.open(data.authorization_url as string, "_blank", "noopener,noreferrer");
+      // Move in the same window so Safari/standalone apps don’t spawn a new tab
+      window.location.replace(data.authorization_url as string);
     } catch {
       setNotice("Something went wrong starting the payment. Please try again.");
     }
