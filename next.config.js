@@ -1,3 +1,8 @@
+import withPWA from "next-pwa";
+import runtimeCaching from "next-pwa/cache.js";
+
+const isProd = process.env.NODE_ENV === "production";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -6,11 +11,18 @@ const nextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
+        protocol: "https",
         hostname: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname,
-        pathname: '/storage/v1/object/**',
+        pathname: "/storage/v1/object/**",
       },
     ],
   },
 };
-export default nextConfig;
+
+export default withPWA({
+  dest: "public",
+  disable: !isProd,
+  register: true,
+  skipWaiting: true,
+  runtimeCaching,
+})(nextConfig);
