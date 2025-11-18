@@ -2,12 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET(req: Request) {
   try {
@@ -26,6 +21,7 @@ export async function GET(req: Request) {
     }
 
     const meta = j.data?.metadata || {};
+    const supabase = getSupabaseAdmin();
     if (meta.kind === "course" && meta.user_id && meta.course_id) {
       await supabase
         .from("enrollments")
@@ -37,6 +33,18 @@ export async function GET(req: Request) {
             updated_at: new Date().toISOString(),
           },
           { onConflict: "user_id,course_id" }
+        );
+    } else if (meta.kind === "ebook" && meta.user_id && meta.ebook_id) {
+      await supabase
+        .from("ebook_purchases")
+        .upsert(
+          {
+            user_id: meta.user_id,
+            ebook_id: meta.ebook_id,
+            status: "paid",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,ebook_id" }
         );
     }
 

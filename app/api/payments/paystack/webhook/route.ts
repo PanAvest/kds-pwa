@@ -46,19 +46,31 @@ export async function POST(req: Request) {
             },
             { onConflict: "user_id,course_id" }
           );
-
-        // Optional audit log (create table if you like)
-        await supabase.from("payments").insert({
-          provider: "paystack",
-          reference: data.reference,
-          user_id: meta.user_id,
-          amount_minor: data.amount,
-          currency: data.currency,
-          status: "success",
-          meta,
-          created_at: new Date().toISOString(),
-        });
+      } else if (meta.kind === "ebook" && meta.user_id && meta.ebook_id) {
+        await supabase
+          .from("ebook_purchases")
+          .upsert(
+            {
+              user_id: meta.user_id,
+              ebook_id: meta.ebook_id,
+              status: "paid",
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,ebook_id" }
+          );
       }
+
+      // Optional audit log (create table if you like)
+      await supabase.from("payments").insert({
+        provider: "paystack",
+        reference: data.reference,
+        user_id: meta.user_id,
+        amount_minor: data.amount,
+        currency: data.currency,
+        status: "success",
+        meta,
+        created_at: new Date().toISOString(),
+      });
     }
 
     // Always respond quickly so Paystack doesn’t retry needlessly
