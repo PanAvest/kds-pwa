@@ -450,7 +450,8 @@ export default function EbookDetailPage() {
                     <button
                       onClick={handleBuy}
                       disabled={buying}
-                      className="rounded-lg bg-brand text-white px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-60 w-full sm:w-auto"
+                      className="rounded-lg text-white px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-60 w-full sm:w-auto"
+                      style={{ backgroundColor: "var(--color-accent-red)" }}
                     >
                       {buying ? "Redirecting…" : `Buy • ${price}`}
                     </button>
@@ -467,7 +468,8 @@ export default function EbookDetailPage() {
                   <>
                     <button
                       onClick={openReader}
-                      className="rounded-lg bg-brand text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
+                      className="rounded-lg text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
+                      style={{ backgroundColor: "var(--color-accent-red)" }}
                     >
                       Read now
                     </button>
