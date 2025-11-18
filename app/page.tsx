@@ -47,23 +47,37 @@ export default function HomePage() {
 
     ;(async () => {
       try {
-        const { data: cData } = await supabase
-          .from("courses")
-          .select("id, slug, title, description, img, cpd_points, published, created_at")
-          .eq("published", true)
-          .order("created_at", { ascending: false })
-          .limit(6)
-
-        const { data: eData } = await supabase
-          .from("ebooks")
-          .select("id, slug, title, description, cover_url, price_cents, published, created_at")
-          .eq("published", true)
-          .order("created_at", { ascending: false })
-          .limit(8)
+        // Fetch in parallel so home loads faster
+        const [coursesRes, ebooksRes] = await Promise.allSettled([
+          supabase
+            .from("courses")
+            .select("id, slug, title, description, img, cpd_points, published, created_at")
+            .eq("published", true)
+            .order("created_at", { ascending: false })
+            .limit(6),
+          supabase
+            .from("ebooks")
+            .select("id, slug, title, description, cover_url, price_cents, published, created_at")
+            .eq("published", true)
+            .order("created_at", { ascending: false })
+            .limit(8),
+        ])
 
         if (!alive) return
-        setCourses((cData ?? []) as Course[])
-        setEbooks((eData ?? []) as Ebook[])
+
+        if (coursesRes.status === "fulfilled") {
+          setCourses((coursesRes.value.data ?? []) as Course[])
+        } else {
+          console.error("Failed to load courses", coursesRes.status === "rejected" ? coursesRes.reason : "unknown")
+          setCourses([])
+        }
+
+        if (ebooksRes.status === "fulfilled") {
+          setEbooks((ebooksRes.value.data ?? []) as Ebook[])
+        } else {
+          console.error("Failed to load ebooks", ebooksRes.status === "rejected" ? ebooksRes.reason : "unknown")
+          setEbooks([])
+        }
       } finally {
         if (alive) setLoading(false)
       }

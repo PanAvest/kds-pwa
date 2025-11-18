@@ -426,7 +426,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="mt-1 text-[11px] text-muted">{Math.round(c.progress_pct)}% complete</div>
                     <Link
-                      href={`/knowledge/${c.slug}/dashboard`}
+                      href={`/courses/${c.slug}/dashboard`}
                       className="mt-2 inline-block rounded-lg px-3 py-1.5 text-xs text-white"
                       style={{ backgroundColor: PANABLUE }}
                     >
@@ -459,7 +459,7 @@ export default function DashboardPage() {
                       <div className="font-semibold line-clamp-1">{meta?.title ?? "Course"}</div>
                       {meta?.slug && (
                         <Link
-                          href={`/knowledge/${meta.slug}/dashboard`}
+                          href={`/courses/${meta.slug}/dashboard`}
                           className="text-xs rounded-md px-2 py-1 bg-[color:var(--color-light)]"
                         >
                           Go to course

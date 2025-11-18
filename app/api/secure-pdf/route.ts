@@ -3,13 +3,7 @@ export const revalidate = 0
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
-
-async function getUserFromBearer(req: Request) {
+async function getUserFromBearer(req: Request, admin: ReturnType<typeof getAdmin>) {
   const auth = req.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
   if (!token) return null;
@@ -18,13 +12,23 @@ async function getUserFromBearer(req: Request) {
   return data.user ?? null;
 }
 
+function getAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    throw new Error("Secure PDF missing Supabase service credentials");
+  }
+  return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
 export async function GET(req: Request) {
   try {
+    const admin = getAdmin();
     const { searchParams } = new URL(req.url);
     const ebookId = searchParams.get("ebookId");
     if (!ebookId) return NextResponse.json({ error: "ebookId required" }, { status: 400 });
 
-    const user = await getUserFromBearer(req);
+    const user = await getUserFromBearer(req, admin);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { data: ebook, error: e1 } = await admin

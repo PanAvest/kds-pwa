@@ -23,7 +23,8 @@ type Ebook = {
   title: string;
   description?: string | null;
   cover_url?: string | null;
-  price_cents: number;
+  // 👇 allow both number and string from Supabase / API
+  price_cents: number | string | null;
   published: boolean;
 };
 
@@ -51,7 +52,6 @@ async function ensurePdfJsLoaded() {
   pdfWorkerOptions = pdf.GlobalWorkerOptions;
   pdfWorkerOptions.workerSrc = "/vendor/pdf.worker.min.mjs";
 }
-
 
 export default function EbookDetailPage() {
   const router = useRouter();
@@ -116,7 +116,11 @@ export default function EbookDetailPage() {
         const r = await fetch(`/api/ebooks/${encodeURIComponent(slug)}`, { cache: "no-store" });
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error || r.statusText);
-        setEbook(j as Ebook);
+
+        // 🔧 If API wraps in { ebook: {...} } use that, otherwise use j directly
+        const raw = (j && typeof j === "object" && "ebook" in j) ? (j.ebook as Ebook) : (j as Ebook);
+
+        setEbook(raw);
       } catch (e) { setErr((e as Error).message); }
     })();
   }, [slug]);
@@ -133,8 +137,8 @@ export default function EbookDetailPage() {
         .eq("user_id", user.id)
         .eq("ebook_id", ebook.id)
         .maybeSingle();
-      if (error) { setOwn({ kind: "not_owner" }); return; }
-      setOwn(data?.status === "paid" ? { kind: "owner" } : { kind: "not_owner" });
+      if (error || !data) { setOwn({ kind: "not_owner" }); return; }
+      setOwn(data.status === "paid" ? { kind: "owner" } : { kind: "not_owner" });
     })();
   }, [ebook?.id]);
 
@@ -170,11 +174,26 @@ export default function EbookDetailPage() {
     return () => { stop = true; };
   }, [search, ebook?.id, userId, slug, router]);
 
-  // Price label
-  const price = useMemo(
-    () => (ebook ? `GH₵ ${(ebook.price_cents / 100).toFixed(2)}` : ""),
-    [ebook]
-  );
+  // 🔧 Safe price calculation (prevents NaN)
+  const price = useMemo(() => {
+    if (!ebook) return "";
+
+    const raw = ebook.price_cents;
+
+    // Convert whatever comes from DB/API to a safe number
+    const numeric = typeof raw === "number"
+      ? raw
+      : raw == null
+        ? NaN
+        : Number(raw);
+
+    if (!Number.isFinite(numeric)) {
+      // fall back so UI doesn't show NaN
+      return "GH₵ 0.00";
+    }
+
+    return `GH₵ ${(numeric / 100).toFixed(2)}`;
+  }, [ebook]);
 
   // Start Paystack
   async function handleBuy() {
@@ -187,7 +206,11 @@ export default function EbookDetailPage() {
 
     setBuying(true);
     try {
-      const amountMinor = Math.round(Number(ebook.price_cents));
+      // 🔧 use the same safe price parsing here too
+      const raw = ebook.price_cents;
+      const numeric = typeof raw === "number" ? raw : Number(raw ?? 0);
+      const amountMinor = Math.round(Number.isFinite(numeric) ? numeric : 0);
+
       const res = await fetch("/api/payments/paystack/init", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -211,7 +234,7 @@ export default function EbookDetailPage() {
     const token = session?.access_token;
     if (!token) { setRenderError("You must be signed in to read this e-book."); return null; }
 
-    const res = await fetch(`/api/ebooks/secure-pdf?ebookId=${encodeURIComponent(ebook.id)}`, {
+    const res = await fetch(`/api/secure-pdf?ebookId=${encodeURIComponent(ebook.id)}`, {
       headers: { Authorization: `Bearer ${token}` }, cache: "no-store"
     });
     if (res.status === 401) { setRenderError("Sign in again."); return null; }
@@ -284,7 +307,7 @@ export default function EbookDetailPage() {
     if (showReader && pdfReady && ebook?.id) void renderPdf();
   }, [showReader, pdfReady, ebook?.id, renderPdf]);
 
-  // UI
+  // UI (unchanged)
   if (err) {
     return (
       <main className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-6">
