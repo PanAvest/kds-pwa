@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { startGlobalLoading } from "@/utils/globalLoading";
 
 import { ProgressBar } from "@/components/ProgressBar";
 
@@ -278,9 +279,14 @@ export default function DashboardPage() {
   async function saveName() {
     const trimmed = nameDraft.trim();
     if (!userId || !trimmed) return;
-    await supabase.from("profiles").upsert({ id: userId, full_name: trimmed, updated_at: new Date().toISOString() });
-    setFullName(trimmed);
-    setIsEditingName(false);
+    const stopGlobal = startGlobalLoading("profile-save");
+    try {
+      await supabase.from("profiles").upsert({ id: userId, full_name: trimmed, updated_at: new Date().toISOString() });
+      setFullName(trimmed);
+      setIsEditingName(false);
+    } finally {
+      stopGlobal();
+    }
   }
 
   // Group quiz rows by course

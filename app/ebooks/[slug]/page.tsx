@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import * as pdfjs from "pdfjs-dist";
+import { startGlobalLoading } from "@/utils/globalLoading";
 
 /** ── Minimal PDF.js typings ──────────────────────────────────────── */
 type PdfHttpHeaders = Record<string, string>;
@@ -221,6 +222,7 @@ export default function EbookDetailPage() {
     if (!ebook || !email) return;
 
     setBuying(true);
+    const stopGlobal = startGlobalLoading("paystack-init");
     try {
       const numeric = typeof ebook.price_cents === "number" ? ebook.price_cents : Number(ebook.price_cents ?? 0);
       const amountMinor = Math.round(Number.isFinite(numeric) ? numeric : 0);
@@ -237,6 +239,8 @@ export default function EbookDetailPage() {
       window.location.replace(data.authorization_url as string);
     } catch (e) {
       setErr((e as Error).message || "Payment init failed");
+    } finally {
+      stopGlobal();
       setBuying(false);
     }
   }

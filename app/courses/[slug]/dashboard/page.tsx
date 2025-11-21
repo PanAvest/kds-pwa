@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { startGlobalLoading } from "@/utils/globalLoading";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -530,6 +531,7 @@ export default function CourseDashboard() {
 
   async function submitQuiz(auto = false) {
     if (!quizOpen || !quizChapterId || !course || !userId) return;
+    const stopGlobal = startGlobalLoading("chapter-quiz-submit");
     const answered = quizItems.map(q => ({
       id: q.id,
       chosen: quizAnswers[q.id],
@@ -574,6 +576,7 @@ export default function CourseDashboard() {
     setQuizTimeLeft(0);
     setNotice(`Quiz submitted. Score: ${correctCount}/${total} (${scorePct}%).`);
     setTimeout(() => setNotice(""), 2500);
+    stopGlobal();
   }
 
   /* ========= Final exam ========= */
@@ -696,6 +699,7 @@ export default function CourseDashboard() {
 
   async function submitFinalExam(auto = false) {
     if (!finalExamOpen || !finalExam || !userId) return;
+    const stopGlobal = startGlobalLoading("final-exam-submit");
     const answered = finalExamQuestions.map(q => ({
       id: q.id,
       chosen: finalAnswers[q.id],
@@ -723,6 +727,7 @@ export default function CourseDashboard() {
     setFinalAnswers({});
     setFinalResult({ scorePct, correct: correctCount, total, passed });
     setResultOpen(true);
+    stopGlobal();
   }
 
   /* ========= Navigation helpers ========= */
