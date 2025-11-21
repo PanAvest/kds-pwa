@@ -1,10 +1,9 @@
 "use client"
 import React from "react"
-import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { pushToast } from "@/components/ui/toast"
-import { startGlobalLoading } from "@/utils/globalLoading"
+import { supabase } from "@/lib/supabaseClient"
 import { useRouter } from "next/navigation"
 
 export default function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
@@ -17,7 +16,6 @@ export default function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const stopGlobal = startGlobalLoading("auth")
     try {
       if (mode === "sign-in") {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -34,7 +32,6 @@ export default function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       pushToast(err.message || "Authentication failed")
     } finally {
       setLoading(false)
-      stopGlobal()
     }
   }
 

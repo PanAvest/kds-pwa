@@ -4,7 +4,6 @@
 import React from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { startGlobalLoading } from "@/utils/globalLoading";
 
 type CourseRow = {
   id: string;
@@ -106,7 +105,6 @@ export default function EnrollPage() {
 
   async function payNow() {
     if (!userId || !email || !course) return;
-    const stopGlobal = startGlobalLoading("paystack-init");
     try {
       setNotice("Redirecting to Paystack…");
       const res = await fetch("/api/payments/paystack/init", {
@@ -127,8 +125,6 @@ export default function EnrollPage() {
       window.location.replace(data.authorization_url as string);
     } catch {
       setNotice("Something went wrong starting the payment. Please try again.");
-    } finally {
-      stopGlobal();
     }
   }
 
