@@ -250,6 +250,7 @@ export default function EbookDetailPage() {
     const accessToken = session?.access_token;
     if (!accessToken) { setRenderError("You must be signed in to read this e-book."); return null; }
 
+    console.log("DEBUG secure-pdf URL", `/api/ebooks/secure-pdf?ebookId=${encodeURIComponent(ebook.id)}`);
     const res = await fetch(`/api/ebooks/secure-pdf?ebookId=${encodeURIComponent(ebook.id)}`, {
       credentials: "include", cache: "no-store",
       headers: { Authorization: `Bearer ${accessToken}` },
