@@ -28,14 +28,28 @@ export default function SimpleCertificate({
   const issued = new Date(date);
   const issuedStr = isNaN(issued.getTime()) ? date : issued.toLocaleDateString();
 
+  const cardStyle: React.CSSProperties = {
+    width: "210mm",
+    maxWidth: "100%",
+    aspectRatio: "210 / 297",
+    background: "#fff",
+    borderRadius: "16px",
+    padding: "32px",
+    margin: "0 auto",
+    boxShadow: "0 12px 35px rgba(0,0,0,0.08), inset 0 0 0 2px rgba(0,0,0,0.04)",
+  };
+
   const border = { boxShadow: `inset 0 0 0 2px ${accent}20, inset 0 0 0 6px #ffffff, inset 0 0 0 8px ${accent}` };
+
+  const handlePrint = () => {
+    if (typeof window !== "undefined") {
+      window.print();
+    }
+  };
 
   return (
     <div className="w-full">
-      <div
-        className="relative mx-auto max-w-[880px] bg-white rounded-xl p-6 sm:p-8 border"
-        style={border}
-      >
+      <div className="kds-cert-print-root" style={{ ...cardStyle, ...border }}>
         {/* Header */}
         <div className="text-center">
           <div className="text-xs tracking-widest text-gray-500">CERTIFICATE OF COMPLETION</div>
@@ -82,21 +96,39 @@ export default function SimpleCertificate({
             <div />
           )}
         </div>
-
-        {/* Print action */}
-        {showPrint && (
-          <div className="mt-6 flex justify-end">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="rounded-lg px-4 py-2 text-sm text-white"
-              style={{ backgroundColor: accent }}
-            >
-              Print / Save as PDF
-            </button>
-          </div>
-        )}
       </div>
+
+      {showPrint && (
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="rounded-lg px-4 py-2 text-sm text-white"
+            style={{ backgroundColor: accent }}
+          >
+            Print / Save as PDF
+          </button>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .kds-cert-print-root,
+          .kds-cert-print-root * {
+            visibility: visible;
+          }
+          .kds-cert-print-root {
+            position: absolute;
+            inset: 0;
+            margin: 0;
+            border-radius: 0;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
