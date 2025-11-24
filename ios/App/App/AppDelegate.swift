@@ -68,8 +68,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // MARK: - Zoom Lock Helper
 
     /// Recursively search for the WKWebView scroll view and disable zooming.
-    private func lockWebViewZoom() {
-        guard let window = self.window else { return }
+    /// Recursively search for the WKWebView scroll view and disable zooming.
+    /// - Parameter targetWindow: specific window to crawl; defaults to AppDelegate.window.
+    func lockWebViewZoom(in targetWindow: UIWindow? = nil) {
+        let window = targetWindow ?? self.window
+        guard let window = window else { return }
 
         func crawl(_ view: UIView) {
             if let scroll = view as? UIScrollView {
@@ -85,4 +88,3 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         crawl(window)
     }
 }
-

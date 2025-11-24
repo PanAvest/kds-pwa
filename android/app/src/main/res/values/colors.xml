@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#B65437</color>
+    <color name="colorPrimaryDark">#8A3F28</color>
+    <color name="colorAccent">#B65437</color>
+
+    <color name="brand_primary">#B65437</color>
+    <color name="brand_surface">#FEFDFB</color>
+    <color name="brand_inactive">#8A8078</color>
+    <color name="text_dark">#2C2522</color>
+</resources>
