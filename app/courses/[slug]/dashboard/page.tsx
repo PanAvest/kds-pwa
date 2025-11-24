@@ -965,9 +965,10 @@ export default function CourseDashboard() {
               })()}
 
               {(activeSlide.body ?? activeSlide.content) && (
-                <div className="prose max-w-none mt-4 text-[0.95rem] leading-relaxed whitespace-pre-wrap">
-                  {activeSlide.body ?? activeSlide.content}
-                </div>
+                <div
+                  className="prose max-w-none mt-4 text-[0.95rem] leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: activeSlide.body ?? activeSlide.content ?? "" }}
+                />
               )}
 
               <div className="mt-4 flex flex-wrap gap-3">

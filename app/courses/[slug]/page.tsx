@@ -16,10 +16,12 @@ type Course = {
 
 export const dynamic = "force-dynamic";
 
-export default async function CoursePreviewPage(props: {
-  params: Promise<{ slug: string }>;
+export default async function CoursePreviewPage({
+  params,
+}: {
+  params: { slug: string };
 }) {
-  const { slug } = await props.params;
+  const { slug } = params;
 
   const sb = getSupabaseAdmin();
   const { data: course } = await sb

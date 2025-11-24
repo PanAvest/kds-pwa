@@ -8,15 +8,25 @@ const nextConfig = {
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname,
-        pathname: "/storage/v1/object/**",
-      },
-    ],
-  },
+  images: (() => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!supabaseUrl) return {};
+    let hostname = "";
+    try {
+      hostname = new URL(supabaseUrl).hostname;
+    } catch {
+      return {};
+    }
+    return {
+      remotePatterns: [
+        {
+          protocol: "https",
+          hostname,
+          pathname: "/storage/v1/object/**",
+        },
+      ],
+    };
+  })(),
 };
 
 export default withPWA({
