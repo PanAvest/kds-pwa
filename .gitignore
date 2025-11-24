@@ -21,3 +21,8 @@
 
 # vercel
 .vercel
+
+# ignore local archives
+panavest-courses.zip
+backups/*.zip
+panavest-courses-full/
