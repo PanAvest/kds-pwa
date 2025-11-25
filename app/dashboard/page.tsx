@@ -320,7 +320,7 @@ export default function DashboardPage() {
       try {
         const primary = await supabase
           .from("certificates")
-          .select("id,user_id,course_id,attempt_id,certificate_no,issued_at")
+          .select("id,user_id,course_id,attempt_id,certificate_no,issued_at,courses:course_id(id,title,slug,img,cpd_points)")
           .eq("user_id", userId)
           .order("issued_at", { ascending: false });
         if (!guard()) return;
@@ -336,7 +336,7 @@ export default function DashboardPage() {
         try {
           const fallback = await supabase
             .from("certificates")
-            .select("id,user_id,course_id,attempt_id,issued_at")
+            .select("id,user_id,course_id,attempt_id,issued_at,courses:course_id(id,title,slug,img,cpd_points)")
             .eq("user_id", userId)
             .order("issued_at", { ascending: false });
           if (!guard()) return;
@@ -352,6 +352,7 @@ export default function DashboardPage() {
 
       const bare = (certRows ?? []) as {
         id: string; user_id: string; course_id: string; attempt_id: string | null; certificate_no?: string | null; issued_at: string;
+        courses?: { id: string; title: string; slug: string; img: string | null; cpd_points: number | null } | null;
       }[];
 
       const attemptIds = Array.from(new Set(bare.map((c) => c.attempt_id).filter(Boolean))) as string[];
@@ -375,8 +376,20 @@ export default function DashboardPage() {
       const certCourseIds = Array.from(new Set(bare.map((c) => c.course_id))).filter(Boolean);
       const missingForCerts = certCourseIds.filter((cid) => !metaAccumulator[cid]);
       const certMeta: Record<string, CourseMeta> = {};
-      if (missingForCerts.length > 0) {
-        const { data: moreCourses } = await supabase.from("courses").select("id,title,slug,img,cpd_points").in("id", missingForCerts);
+      // Seed meta from joined courses (if present)
+      bare.forEach((c) => {
+        if (c.courses?.id) {
+          certMeta[c.course_id] = {
+            title: c.courses.title,
+            slug: c.courses.slug,
+            img: c.courses.img ?? null,
+            cpd_points: c.courses.cpd_points ?? null,
+          };
+        }
+      });
+      const stillMissing = missingForCerts.filter((cid) => !certMeta[cid]);
+      if (stillMissing.length > 0) {
+        const { data: moreCourses } = await supabase.from("courses").select("id,title,slug,img,cpd_points").in("id", stillMissing);
         if (!guard()) return;
         (moreCourses as CourseRow[] | null | undefined)?.forEach((cr) => {
           certMeta[cr.id] = { title: cr.title, slug: cr.slug, cpd_points: cr.cpd_points ?? null, img: cr.img ?? null };
