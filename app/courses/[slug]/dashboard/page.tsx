@@ -203,11 +203,13 @@ export default function CourseDashboard() {
   const sanitizedHtml = useMemo(() => {
     const raw = activeSlide?.body ?? activeSlide?.content ?? "";
     if (!raw) return "";
-    const decoded = he.decode(raw);
+    // Decode entities (handles double-encoded bodies) then sanitize
+    let decoded = he.decode(raw);
+    if (decoded.includes("&lt;") || decoded.includes("&gt;")) {
+      decoded = he.decode(decoded);
+    }
     return DOMPurify.sanitize(decoded, {
-      // Allow basic formatting; keep styles off to prevent inline color dumps
-      FORBID_ATTR: ["style"],
-      ALLOWED_ATTR: ["href", "src", "alt", "title", "target", "rel"],
+      ADD_ATTR: ["style"], // allow inline styles similar to main site
     });
   }, [activeSlide?.body, activeSlide?.content]);
 
