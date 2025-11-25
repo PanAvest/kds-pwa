@@ -241,7 +241,9 @@ export default function DashboardPage() {
         });
       }
       setEnrolled(enrolledTmp);
-      setCourseMetaMap((prev) => ({ ...prev, ...localMeta }));
+
+      // Start a local accumulator for course meta to avoid stale state usage
+      let metaAccumulator: Record<string, CourseMeta> = { ...courseMetaMap, ...localMeta };
 
       // Purchased E-Books (paid only)
       const { data: purRows } = await supabase
@@ -297,7 +299,7 @@ export default function DashboardPage() {
       }
 
       // Ensure Course Meta
-      const existingIds = new Set([...Object.keys(courseMetaMap), ...Object.keys(localMeta)]);
+      const existingIds = new Set(Object.keys(metaAccumulator));
       const metaMissingFromQuiz = Array.from(new Set(attempts.map((a) => a.course_id))).filter(Boolean).filter((cid) => !existingIds.has(cid));
       const metaMissingFromEnroll = Array.from(new Set(enrolledTmp.map((e) => e.course_id))).filter((cid) => !existingIds.has(cid));
       const toFetch = Array.from(new Set([...metaMissingFromQuiz, ...metaMissingFromEnroll]));
@@ -309,10 +311,7 @@ export default function DashboardPage() {
           fetchedMeta[cr.id] = { title: cr.title, slug: cr.slug, cpd_points: cr.cpd_points ?? null, img: cr.img ?? null };
         });
       }
-      const metaSnapshot: Record<string, CourseMeta> = { ...courseMetaMap, ...localMeta, ...fetchedMeta };
-      if (Object.keys(fetchedMeta).length > 0) {
-        setCourseMetaMap((prev) => ({ ...prev, ...localMeta, ...fetchedMeta }));
-      }
+      metaAccumulator = { ...metaAccumulator, ...fetchedMeta };
 
       /* Certificates (hydrate meta as needed) */
       let certificateNoMissing = false;
@@ -374,7 +373,7 @@ export default function DashboardPage() {
       }
 
       const certCourseIds = Array.from(new Set(bare.map((c) => c.course_id))).filter(Boolean);
-      const missingForCerts = certCourseIds.filter((cid) => !metaSnapshot[cid]);
+      const missingForCerts = certCourseIds.filter((cid) => !metaAccumulator[cid]);
       const certMeta: Record<string, CourseMeta> = {};
       if (missingForCerts.length > 0) {
         const { data: moreCourses } = await supabase.from("courses").select("id,title,slug,img,cpd_points").in("id", missingForCerts);
@@ -391,7 +390,7 @@ export default function DashboardPage() {
             : certificateNoMissing
               ? makeKdsCertId(userId, c.course_id)
               : makeKdsCertId(userId, c.course_id);
-        const meta = certMeta[c.course_id] || metaSnapshot[c.course_id];
+        const meta = certMeta[c.course_id] || metaAccumulator[c.course_id];
         return {
           ...c,
           certificate_no: certificateNumber,
@@ -403,9 +402,7 @@ export default function DashboardPage() {
       });
       setCerts(mergedCerts);
 
-      if (Object.keys(certMeta).length > 0) {
-        setCourseMetaMap((prev) => ({ ...prev, ...localMeta, ...fetchedMeta, ...certMeta }));
-      }
+      metaAccumulator = { ...metaAccumulator, ...certMeta };
 
       /* Provisional (passed + 100% progress, awaiting issuance) */
       if (courseIds.length > 0) {
@@ -453,7 +450,7 @@ export default function DashboardPage() {
           const hundred = (progressByCourse[cid] ?? 0) >= 100;
 
           if (passed && hundred) {
-            const meta = certMeta[cid] || metaSnapshot[cid] || localMeta[cid];
+            const meta = certMeta[cid] || metaAccumulator[cid] || localMeta[cid];
             provisional.push({
               course_id: cid,
               course_title: meta?.title ?? "Course",
@@ -468,6 +465,9 @@ export default function DashboardPage() {
 
         setProvisionalCerts(provisional);
       }
+
+      // Finalize shared meta map for UI
+      setCourseMetaMap(metaAccumulator);
 
       setLoading(false);
     })();
