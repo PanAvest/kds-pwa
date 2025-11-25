@@ -199,6 +199,14 @@ export default function CourseDashboard() {
   const [certificateNotice, setCertificateNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const initializedRef = useRef(false);
   const isInteractive = course?.delivery_mode === "interactive";
+  const sanitizedHtml = useMemo(() => {
+    const html = activeSlide?.body ?? activeSlide?.content ?? "";
+    if (!html) return "";
+    return DOMPurify.sanitize(html, {
+      FORBID_ATTR: ["style"],
+      ALLOWED_ATTR: ["href", "src", "alt", "title", "target", "rel"],
+    });
+  }, [activeSlide?.body, activeSlide?.content]);
 
   /* ========= Auth ========= */
   useEffect(() => {
@@ -1138,10 +1146,10 @@ export default function CourseDashboard() {
                 return null;
               })()}
 
-              {(activeSlide.body ?? activeSlide.content) && (
+              {sanitizedHtml && (
                 <div
-                  className="prose max-w-none mt-4 text-[0.95rem] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(activeSlide.body ?? activeSlide.content ?? "") }}
+                  className="prose prose-sm sm:prose max-w-none mt-4 text-[0.95rem] leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
                 />
               )}
 
