@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { issueCertificateForCourse, IssueCertificateError } from "@/lib/client/issueCertificate";
+import InteractivePlayer from "@/components/InteractivePlayer";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -1044,14 +1045,7 @@ export default function CourseDashboard() {
               </div>
 
               {course?.interactive_path ? (
-                <div className="rounded-lg overflow-hidden ring-1 ring-[color:var(--color-light)]">
-                  <iframe
-                    src={course.interactive_path}
-                    title="Interactive course player"
-                    className="w-full h-[260px] md:h-[360px] bg-black"
-                    allowFullScreen
-                  />
-                </div>
+                <InteractivePlayer src={course.interactive_path} title="Interactive course player" />
               ) : (
                 <div className="text-sm text-red-700">Interactive entry path is not configured for this course.</div>
               )}

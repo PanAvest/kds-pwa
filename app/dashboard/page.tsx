@@ -196,7 +196,7 @@ export default function DashboardPage() {
         });
       }
 
-      // Compute progress from slides
+      // Compute progress from slides for all courses (mirror main site)
       courseIds = Array.from(new Set(courseIds));
       if (courseIds.length > 0) {
         const { data: chRows } = await supabase.from("course_chapters").select("id,course_id").in("course_id", courseIds);
@@ -207,7 +207,6 @@ export default function DashboardPage() {
         });
 
         const allChapterIds = Object.values(chaptersByCourse).flat();
-
         const totalSlidesByCourse: Record<string, number> = {};
         if (allChapterIds.length > 0) {
           const { data: slRows } = await supabase.from("course_slides").select("id,chapter_id").in("chapter_id", allChapterIds);

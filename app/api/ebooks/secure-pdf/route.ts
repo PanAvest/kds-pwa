@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
     // 3) Load ebook
     const { data: ebook, error: ebookErr } = await sb
       .from("ebooks")
-      .select("id, published, sample_url")
+      .select("id, published, sample_url, file_path")
       .eq("id", ebookId)
       .maybeSingle();
 
@@ -98,8 +98,9 @@ export async function GET(req: NextRequest) {
       return respondDebug(403, "not-purchased", { purchaseStatus: purchase?.status ?? null });
     }
 
-    // 5) Check sample_url
-    if (!ebook.sample_url) {
+    // 5) Pick the actual PDF source
+    const pdfUrl = ebook.file_path || ebook.sample_url;
+    if (!pdfUrl) {
       return respondDebug(404, "no-sample-url");
     }
 
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 6) Fetch and stream the PDF
-    const upstream = await fetch(ebook.sample_url, { cache: "no-store" });
+    const upstream = await fetch(pdfUrl, { cache: "no-store" });
     if (!upstream.ok) {
       console.error("secure-pdf upstream failed", upstream.status);
       return respondDebug(502, "upstream-fail", { upstreamStatus: upstream.status });
