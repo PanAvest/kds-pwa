@@ -68,7 +68,11 @@ function resolveSource(filePath?: string | null): ResolvedSource | null {
   return null;
 }
 
-async function materializeSource(source: ResolvedSource | null, signer: ReturnType<typeof supabaseService> | ReturnType<typeof supabaseForToken> | null, fallback: ReturnType<typeof supabaseForToken>) {
+async function materializeSource(
+  source: ResolvedSource | null,
+  signer: ReturnType<typeof supabaseService> | ReturnType<typeof supabaseForToken> | null,
+  fallback: ReturnType<typeof supabaseForToken>
+) {
   if (!source) return null;
   if (source.kind === "remote-url") return source.url;
 
@@ -76,8 +80,12 @@ async function materializeSource(source: ResolvedSource | null, signer: ReturnTy
   if (!client) return null;
 
   if (signer) {
-    const { data, error } = await (signer as any).storage.from(source.bucket).createSignedUrl(source.objectPath, 60 * 30);
-    if (!error && data?.signedUrl) return data.signedUrl;
+    try {
+      const { data, error } = await (signer as any).storage.from(source.bucket).createSignedUrl(source.objectPath, 60 * 30);
+      if (!error && data?.signedUrl) return data.signedUrl;
+    } catch (err) {
+      console.warn("secure-pdf signing failed", err);
+    }
   }
 
   const { data: pub } = (fallback as any).storage.from(source.bucket).getPublicUrl(source.objectPath);
@@ -167,7 +175,13 @@ export async function GET(req: NextRequest) {
     }
 
     const svc = supabaseService();
-    const signedUrl = await materializeSource(resolved, svc, sb);
+    let signedUrl: string | null = null;
+    try {
+      signedUrl = await materializeSource(resolved, svc, sb);
+    } catch (err: any) {
+      console.error("secure-pdf materializeSource error", err);
+      return respondDebug(500, "materialize-error", { message: err?.message ?? String(err) });
+    }
     if (!signedUrl) {
       return respondDebug(404, "pdf-missing");
     }
