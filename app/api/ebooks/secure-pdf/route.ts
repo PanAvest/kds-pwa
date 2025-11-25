@@ -16,12 +16,96 @@ function supabaseForToken(accessToken: string) {
   });
 }
 
-export async function GET(req: NextRequest) {
+// Service client for signing storage URLs (if available)
+function supabaseService() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !service) return null;
+  return createClient(url, service, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
+type ResolvedSource =
+  | { kind: "remote-url"; url: string }
+  | { kind: "storage"; bucket: string; objectPath: string };
+
+function resolveSource(filePath?: string | null): ResolvedSource | null {
+  if (!filePath) return null;
+  const trimmed = filePath.trim();
+  if (!trimmed) return null;
+
+  // Full URL?
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const afterObject = parsed.pathname.split("/storage/v1/object/")[1];
+      if (afterObject) {
+        const parts = afterObject.split("/").filter(Boolean);
+        if (["public", "signed", "sign"].includes(parts[0])) parts.shift();
+        const [bucket, ...objParts] = parts;
+        if (bucket && objParts.length > 0) {
+          return { kind: "storage", bucket, objectPath: decodeURIComponent(objParts.join("/")) };
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return { kind: "remote-url", url: trimmed };
+  }
+
+  // Bucket/path format
+  const normalized = trimmed.replace(/^\/+/, "");
+  const [bucket, ...rest] = normalized.split("/").filter(Boolean);
+  if (bucket && rest.length > 0) {
+    return { kind: "storage", bucket, objectPath: rest.join("/") };
+  }
+
+  return null;
+}
+
+async function materializeSource(
+  source: ResolvedSource | null,
+  signer: ReturnType<typeof supabaseService> | null,
+  fallback: ReturnType<typeof supabaseForToken>
+): Promise<string | null> {
+  if (!source) return null;
+  if (source.kind === "remote-url") return source.url;
+
+  // Try signed URL with service key
+  if (signer) {
+    try {
+      const { data, error } = await (signer as any).storage.from(source.bucket).createSignedUrl(source.objectPath, 60 * 30);
+      if (!error && data?.signedUrl) return data.signedUrl;
+    } catch (err) {
+      console.warn("secure-pdf signing failed", err);
+    }
+  }
+
+  // Fallback: public URL via anon/user client
   try {
-    const { searchParams } = new URL(req.url);
-    const ebookId = searchParams.get("ebookId");
+    const { data: pub } = (fallback as any).storage.from(source.bucket).getPublicUrl(source.objectPath);
+    if (pub?.publicUrl) return pub.publicUrl;
+  } catch (err) {
+    console.warn("secure-pdf publicUrl failed", err);
+  }
+
+  return null;
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const ebookId = searchParams.get("ebookId");
+  const debug = searchParams.get("debug") === "1";
+
+  const respond = (status: number, step: string, extra: Record<string, unknown> = {}) => {
+    if (!debug && status === 200) return null; // will stream PDF
+    return NextResponse.json({ step, ...extra }, { status });
+  };
+
+  try {
     if (!ebookId) {
-      return NextResponse.json({ error: "ebookId required" }, { status: 400 });
+      return NextResponse.json({ error: "ebookId required", step: "missing-ebookId" }, { status: 400 });
     }
 
     // 1) Get access token from Authorization header or cookie
@@ -35,29 +119,29 @@ export async function GET(req: NextRequest) {
       token = jar.get("sb-access-token")?.value || "";
     }
     if (!token) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json({ error: "Not authenticated", step: "no-token" }, { status: 401 });
     }
 
     // 2) Identify user
     const sb = supabaseForToken(token);
     const { data: userInfo, error: userErr } = await sb.auth.getUser();
     if (userErr || !userInfo?.user) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+      return NextResponse.json({ error: "Invalid session", step: "user-auth" }, { status: 401 });
     }
     const userId = userInfo.user.id;
 
-    // 3) Load ebook. Keep selection minimal to avoid column errors.
+    // 3) Load ebook (minimal columns)
     const { data: ebook, error: ebookErr } = await sb
       .from("ebooks")
-      .select("id, published, sample_url")
+      .select("id, published, sample_url, file_path")
       .eq("id", ebookId)
       .maybeSingle();
 
     if (ebookErr) {
-      return NextResponse.json({ error: `DB error: ${ebookErr.message}` }, { status: 500 });
+      return NextResponse.json({ error: ebookErr.message, step: "ebook-db" }, { status: 500 });
     }
     if (!ebook || ebook.published !== true) {
-      return NextResponse.json({ error: "Ebook not found or not published" }, { status: 404 });
+      return NextResponse.json({ error: "Ebook not found or not published", step: "ebook-not-found" }, { status: 404 });
     }
 
     // 4) Verify ownership in ebook_purchases (status must be 'paid')
@@ -69,25 +153,43 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (purchaseErr) {
-      return NextResponse.json({ error: `Purchase check failed: ${purchaseErr.message}` }, { status: 500 });
+      return NextResponse.json({ error: purchaseErr.message, step: "purchase-db" }, { status: 500 });
     }
 
     const isOwner = purchase?.status === "paid";
     if (!isOwner) {
-      return NextResponse.json({ error: "Not purchased" }, { status: 403 });
+      return NextResponse.json({ error: "Not purchased", step: "not-owner", purchaseStatus: purchase?.status ?? null }, { status: 403 });
     }
 
-    // 5) Stream the PDF from sample_url (paid URL)
-    if (!ebook.sample_url) {
-      return NextResponse.json({ error: "No PDF URL configured for this ebook" }, { status: 404 });
+    // 5) Resolve source (prefer file_path, fallback sample_url)
+    const source = resolveSource(ebook.file_path || ebook.sample_url);
+    if (!source) {
+      return NextResponse.json({ error: "No PDF URL configured for this ebook", step: "no-source" }, { status: 404 });
     }
 
-    const upstream = await fetch(ebook.sample_url, { cache: "no-store" });
-    if (!upstream.ok) {
+    const signer = supabaseService();
+    const materialized = await materializeSource(source, signer, sb);
+    if (!materialized) {
+      return NextResponse.json({ error: "PDF missing or inaccessible", step: "pdf-missing" }, { status: 404 });
+    }
+
+    if (debug) {
       return NextResponse.json(
-        { error: `Upstream fetch failed`, status: upstream.status },
-        { status: 502 }
+        { step: "ok", userId, ebookId, source, resolved: materialized, purchaseStatus: purchase?.status ?? null },
+        { status: 200 }
       );
+    }
+
+    // 6) Fetch and stream the PDF
+    let upstream: Response;
+    try {
+      upstream = await fetch(materialized, { cache: "no-store" });
+    } catch (err: any) {
+      return NextResponse.json({ error: err?.message ?? "Upstream fetch failed", step: "upstream-fetch" }, { status: 502 });
+    }
+
+    if (!upstream.ok || !upstream.body) {
+      return NextResponse.json({ error: "Upstream fetch failed", step: "upstream-status", upstreamStatus: upstream.status }, { status: 502 });
     }
 
     const headers = new Headers();
@@ -99,7 +201,7 @@ export async function GET(req: NextRequest) {
     return new Response(upstream.body, { status: 200, headers });
   } catch (e) {
     return NextResponse.json(
-      { error: (e as Error).message || "Server error" },
+      { error: (e as Error).message || "Server error", step: "catch" },
       { status: 500 }
     );
   }
