@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { issueCertificateForCourse, IssueCertificateError } from "@/lib/client/issueCertificate";
 import InteractivePlayer from "@/components/InteractivePlayer";
+import DOMPurify from "dompurify";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -1140,7 +1141,7 @@ export default function CourseDashboard() {
               {(activeSlide.body ?? activeSlide.content) && (
                 <div
                   className="prose max-w-none mt-4 text-[0.95rem] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: activeSlide.body ?? activeSlide.content ?? "" }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(activeSlide.body ?? activeSlide.content ?? "") }}
                 />
               )}
 
