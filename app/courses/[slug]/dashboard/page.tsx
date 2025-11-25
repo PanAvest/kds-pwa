@@ -77,14 +77,6 @@ type ChapterQuizScore = {
 };
 type InteractiveState = "not_started" | "in_progress" | "completed";
 
-const decodeHtml = (raw: string) =>
-  raw
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-
 /* ========================= Utils ========================= */
 function shuffle<T>(arr: T[]) {
   const a = [...arr];
@@ -1148,7 +1140,7 @@ export default function CourseDashboard() {
               {(activeSlide.body ?? activeSlide.content) && (
                 <div
                   className="prose max-w-none mt-4 text-[0.95rem] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: decodeHtml(activeSlide.body ?? activeSlide.content ?? "") }}
+                  dangerouslySetInnerHTML={{ __html: activeSlide.body ?? activeSlide.content ?? "" }}
                 />
               )}
 
