@@ -24,6 +24,67 @@ function supabaseForToken(accessToken: string) {
   });
 }
 
+function supabaseService() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !service) return null;
+  return createClient(url, service, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
+type ResolvedSource =
+  | { kind: "remote-url"; url: string }
+  | { kind: "storage"; bucket: string; objectPath: string };
+
+function resolveSource(filePath?: string | null): ResolvedSource | null {
+  if (!filePath) return null;
+  const trimmed = filePath.trim();
+  if (!trimmed) return null;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const afterObject = parsed.pathname.split("/storage/v1/object/")[1];
+      if (afterObject) {
+        const parts = afterObject.split("/").filter(Boolean);
+        if (["public", "signed", "sign"].includes(parts[0])) parts.shift();
+        const [bucket, ...objParts] = parts;
+        if (bucket && objParts.length > 0) {
+          return { kind: "storage", bucket, objectPath: decodeURIComponent(objParts.join("/")) };
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return { kind: "remote-url", url: trimmed };
+  }
+
+  const normalized = trimmed.replace(/^\/+/, "");
+  const [bucket, ...rest] = normalized.split("/").filter(Boolean);
+  if (bucket && rest.length > 0) {
+    return { kind: "storage", bucket, objectPath: rest.join("/") };
+  }
+  return null;
+}
+
+async function materializeSource(source: ResolvedSource | null, signer: ReturnType<typeof supabaseService> | ReturnType<typeof supabaseForToken> | null, fallback: ReturnType<typeof supabaseForToken>) {
+  if (!source) return null;
+  if (source.kind === "remote-url") return source.url;
+
+  const client = (signer as any) || fallback;
+  if (!client) return null;
+
+  if (signer) {
+    const { data, error } = await (signer as any).storage.from(source.bucket).createSignedUrl(source.objectPath, 60 * 30);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  }
+
+  const { data: pub } = (fallback as any).storage.from(source.bucket).getPublicUrl(source.objectPath);
+  if (pub?.publicUrl) return pub.publicUrl;
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const ebookId = url.searchParams.get("ebookId");
@@ -98,24 +159,32 @@ export async function GET(req: NextRequest) {
       return respondDebug(403, "not-purchased", { purchaseStatus: purchase?.status ?? null });
     }
 
-    // 5) Pick the actual PDF source
-    const pdfUrl = ebook.file_path || ebook.sample_url;
-    if (!pdfUrl) {
+    // 5) Pick the actual PDF source (support Supabase Storage paths)
+    const pdfSource = ebook.file_path || ebook.sample_url;
+    const resolved = resolveSource(pdfSource);
+    if (!resolved) {
       return respondDebug(404, "no-sample-url");
     }
 
+    const svc = supabaseService();
+    const signedUrl = await materializeSource(resolved, svc, sb);
+    if (!signedUrl) {
+      return respondDebug(404, "pdf-missing");
+    }
+
     if (debug) {
-      // In debug mode, don't stream PDF, just show what we'd use
       return respondDebug(200, "ok", {
         userId,
         ebookId,
-        sample_url: ebook.sample_url,
+        pdfSource,
+        resolved,
+        signedUrl,
         purchaseStatus: purchase?.status ?? null,
       });
     }
 
     // 6) Fetch and stream the PDF
-    const upstream = await fetch(pdfUrl, { cache: "no-store" });
+    const upstream = await fetch(signedUrl, { cache: "no-store" });
     if (!upstream.ok) {
       console.error("secure-pdf upstream failed", upstream.status);
       return respondDebug(502, "upstream-fail", { upstreamStatus: upstream.status });
