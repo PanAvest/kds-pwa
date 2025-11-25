@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { issueCertificateForCourse, IssueCertificateError } from "@/lib/client/issueCertificate";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -24,7 +25,7 @@ function ProgressBar({ value = 0 }: { value: number }) {
 }
 
 /* ========================= Types ========================= */
-type Course = { id: string; slug: string; title: string; img: string | null };
+type Course = { id: string; slug: string; title: string; img: string | null; delivery_mode?: string | null; interactive_path?: string | null };
 type Chapter = { id: string; title: string; order_index: number; intro_video_url: string | null };
 type Slide = {
   id: string;
@@ -56,6 +57,7 @@ type Exam = {
   title: string | null;
   pass_mark: number | null;
   time_limit_minutes: number | null;
+   num_questions?: number | null;
 };
 type ExamQuestion = {
   id: string;
@@ -72,6 +74,7 @@ type ChapterQuizScore = {
   totalCount: number | null;
   completedAt: string | null;
 };
+type InteractiveState = "not_started" | "in_progress" | "completed";
 
 /* ========================= Utils ========================= */
 function shuffle<T>(arr: T[]) {
@@ -81,6 +84,13 @@ function shuffle<T>(arr: T[]) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+function shuffleOptionsWithAnswer(options: string[], correctIndex: number) {
+  const mapped = options.map((opt, idx) => ({ opt, idx }));
+  const shuffled = shuffle(mapped);
+  const newOptions = shuffled.map((s) => s.opt);
+  const newIndex = Math.max(0, shuffled.findIndex((s) => s.idx === correctIndex));
+  return { newOptions, newIndex: newIndex === -1 ? 0 : newIndex };
 }
 function secondsToClock(s: number) {
   const m = Math.floor(s / 60);
@@ -155,6 +165,8 @@ export default function CourseDashboard() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [completed, setCompleted] = useState<string[]>([]);
   const [activeSlide, setActiveSlide] = useState<Slide | null>(null);
+  const [interactiveStatus, setInteractiveStatus] = useState<InteractiveState>("not_started");
+  const [interactiveLastSeen, setInteractiveLastSeen] = useState<string | null>(null);
 
   /* Quiz/Exam state */
   const [quizByChapter, setQuizByChapter] = useState<Record<string, QuizQuestion[]>>({});
@@ -170,6 +182,7 @@ export default function CourseDashboard() {
 
   const [finalExam, setFinalExam] = useState<Exam | null>(null);
   const [finalExamQuestions, setFinalExamQuestions] = useState<ExamQuestion[]>([]);
+  const [activeExamQuestions, setActiveExamQuestions] = useState<ExamQuestion[]>([]);
   const [finalExamOpen, setFinalExamOpen] = useState(false);
   const [finalAnswers, setFinalAnswers] = useState<Record<string, number | null>>({});
   const [finalTimeLeft, setFinalTimeLeft] = useState<number>(0);
@@ -181,7 +194,9 @@ export default function CourseDashboard() {
   const [notice, setNotice] = useState<string>("");
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [chaptersOpen, setChaptersOpen] = useState(false); // slide-over
+  const [certificateNotice, setCertificateNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const initializedRef = useRef(false);
+  const isInteractive = course?.delivery_mode === "interactive";
 
   /* ========= Auth ========= */
   useEffect(() => {
@@ -202,7 +217,7 @@ export default function CourseDashboard() {
       // course
       const { data: c } = await supabase
         .from("courses")
-        .select("id,slug,title,img")
+        .select("id,slug,title,img,delivery_mode,interactive_path")
         .eq("slug", String(slug))
         .maybeSingle<Course>();
       if (!c) { router.push("/courses"); return; }
@@ -218,6 +233,42 @@ export default function CourseDashboard() {
       if (enrErr || !enr || enr.paid !== true) {
         router.replace(`/courses/${c.slug}/enroll`);
         return;
+      }
+
+      if (c.delivery_mode === "interactive") {
+        try {
+          await fetch("/api/interactive/ensure", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ course_id: c.id }),
+          });
+          const nowIso = new Date().toISOString();
+          const { data: istate } = await supabase
+            .from("user_interactive_state")
+            .select("status,last_seen_at")
+            .eq("user_id", userId)
+            .eq("course_id", c.id)
+            .maybeSingle();
+          const nextStatus = istate?.status === "completed" ? "completed" : "in_progress";
+          const { data: upData } = await supabase
+            .from("user_interactive_state")
+            .upsert(
+              {
+                user_id: userId,
+                course_id: c.id,
+                status: nextStatus,
+                last_seen_at: nowIso,
+              },
+              { onConflict: "user_id,course_id" }
+            )
+            .select("status,last_seen_at")
+            .maybeSingle();
+          const resolvedState = (upData?.status ?? nextStatus) as InteractiveState;
+          setInteractiveStatus(resolvedState);
+          setInteractiveLastSeen(upData?.last_seen_at ?? istate?.last_seen_at ?? nowIso);
+        } catch {
+          /* non-blocking */
+        }
       }
 
       // chapters
@@ -346,7 +397,7 @@ export default function CourseDashboard() {
       try {
         const { data: ex } = await supabase
           .from("exams")
-          .select("id,course_id,title,pass_mark,time_limit_minutes")
+          .select("id,course_id,title,pass_mark,time_limit_minutes,num_questions")
           .eq("course_id", c.id)
           .limit(1)
           .maybeSingle<Exam>();
@@ -363,12 +414,14 @@ export default function CourseDashboard() {
             .from("questions")
             .select("id,exam_id,prompt,options,correct_index")
             .eq("exam_id", ex.id) as unknown as { data: ExamQuestion[] };
-          setFinalExamQuestions(
-            (qs2 ?? []).map(q => ({ ...q, options: Array.isArray(q.options) ? q.options : [] }))
-          );
+          const normalized = (qs2 ?? []).map(q => ({ ...q, options: Array.isArray(q.options) ? q.options : [] }));
+          setFinalExamQuestions(normalized);
+          setActiveExamQuestions([]);
+          setFinalAnswers({});
         } else {
           setFinalExam(null);
           setFinalExamQuestions([]);
+          setActiveExamQuestions([]);
           setFinalAttemptExists(false);
         }
       } catch {}
@@ -484,6 +537,31 @@ export default function CourseDashboard() {
     }
   }
 
+  async function completeInteractiveModule() {
+    if (!activeSlide) return;
+    await markDone(activeSlide);
+    if (course && userId) {
+      const nowIso = new Date().toISOString();
+      try {
+        await supabase
+          .from("user_interactive_state")
+          .upsert(
+            {
+              user_id: userId,
+              course_id: course.id,
+              status: "completed",
+              last_seen_at: nowIso,
+            },
+            { onConflict: "user_id,course_id" }
+          );
+        setInteractiveStatus("completed");
+        setInteractiveLastSeen(nowIso);
+      } catch {
+        /* non-blocking */
+      }
+    }
+  }
+
   /* ========= Chapter quiz ========= */
   const [quizTickOn, setQuizTickOn] = useState(false);
   function beginQuiz(chId: string) {
@@ -592,6 +670,7 @@ export default function CourseDashboard() {
   const canTakeFinal = allSlidesDone && allChapterQuizzesDone && !!finalExam && !!finalExamQuestions.length;
 
   function openFinalConfirm() {
+    setCertificateNotice(null);
     if (!finalExam || finalExamQuestions.length === 0) {
       setNotice("Final exam is not set yet.");
       setTimeout(() => setNotice(""), 1800);
@@ -607,6 +686,7 @@ export default function CourseDashboard() {
       setTimeout(() => setNotice(""), 2500);
       return;
     }
+    setFinalConfirmChecked(false);
     setFinalConfirmOpen(true);
   }
 
@@ -621,8 +701,20 @@ export default function CourseDashboard() {
       return;
     }
     const randomized = shuffle(finalExamQuestions);
+    const limitRaw = Number(finalExam?.num_questions ?? 50);
+    const limit = Math.max(1, Math.min(randomized.length, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : randomized.length));
+    const selected = randomized.slice(0, limit).map((q) => {
+      const { newOptions, newIndex } = shuffleOptionsWithAnswer(q.options, q.correct_index);
+      return { ...q, options: newOptions, correct_index: newIndex };
+    });
+    if (selected.length === 0) {
+      setNotice("Final exam does not have any questions yet.");
+      setTimeout(() => setNotice(""), 1800);
+      return;
+    }
     const answers: Record<string, number | null> = {};
-    randomized.forEach(q => { answers[q.id] = null; });
+    selected.forEach(q => { answers[q.id] = null; });
+    setActiveExamQuestions(selected);
     setFinalAnswers(answers);
     const limitMinutes = Math.max(1, Number(finalExam?.time_limit_minutes ?? 60));
     setFinalTimeLeft(limitMinutes * 60);
@@ -696,32 +788,65 @@ export default function CourseDashboard() {
 
   async function submitFinalExam(auto = false) {
     if (!finalExamOpen || !finalExam || !userId) return;
-    const answered = finalExamQuestions.map(q => ({
+    setCertificateNotice(null);
+    const questionSet = activeExamQuestions.length > 0 ? activeExamQuestions : finalExamQuestions;
+    if (questionSet.length === 0) {
+      setNotice("Final exam questions not found.");
+      setTimeout(() => setNotice(""), 1800);
+      return;
+    }
+    const answered = questionSet.map(q => ({
       id: q.id,
       chosen: finalAnswers[q.id],
       correct: q.correct_index,
     }));
-    const total = finalExamQuestions.length;
+    const total = questionSet.length;
     const correctCount = answered.reduce((acc, a) => acc + (a.chosen === a.correct ? 1 : 0), 0);
     const scorePct = Math.round((correctCount / Math.max(1, total)) * 100);
     const passMark = Number(finalExam.pass_mark ?? 0);
     const passed = scorePct >= passMark;
 
-    try {
-      await supabase.from("attempts").insert({
-        user_id: userId,
-        exam_id: finalExam.id,
-        score: scorePct,
-        passed,
-        created_at: new Date().toISOString(),
-        meta: { autoSubmit: auto, total, correctCount } as Record<string, unknown>,
-      });
-      setFinalAttemptExists(true);
-    } catch {}
     setFinalExamOpen(false);
     setFinalTimeLeft(0);
+    setActiveExamQuestions([]);
     setFinalAnswers({});
     setFinalResult({ scorePct, correct: correctCount, total, passed });
+    if (passed) {
+      try {
+        setCertificateNotice({ type: "info", message: "Issuing your certificate…" });
+        await issueCertificateForCourse({
+          courseId: finalExam.course_id,
+          examId: finalExam.id,
+          score: scorePct,
+          total,
+          correctCount,
+          autoSubmit: auto,
+        });
+        setFinalAttemptExists(true);
+        setCertificateNotice({ type: "success", message: "Certificate issued! Visit your Dashboard to download it." });
+      } catch (err) {
+        const code = err instanceof IssueCertificateError ? err.code : (err as { code?: string } | null)?.code ?? null;
+        if (code === "NOT_AUTHENTICATED") {
+          setCertificateNotice({ type: "error", message: "Please sign in again before issuing your certificate." });
+        } else if (code === "MISSING_FULL_NAME") {
+          setCertificateNotice({ type: "error", message: "Add your full name on the Dashboard before we can issue your certificate." });
+        } else {
+          console.error("certificate issue failed", err);
+          setCertificateNotice({ type: "error", message: "We could not issue your certificate right now. Please try again or contact support." });
+        }
+      }
+    } else {
+      try {
+        await supabase.from("attempts").insert({
+          user_id: userId,
+          exam_id: finalExam.id,
+          score: scorePct,
+          passed: false,
+          created_at: new Date().toISOString(),
+          meta: { autoSubmit: auto, total, correctCount } as Record<string, unknown>,
+        });
+      } catch {}
+    }
     setResultOpen(true);
   }
 
@@ -852,6 +977,12 @@ export default function CourseDashboard() {
           <div className="mt-1"><ProgressBar value={pct} /></div>
           <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{done} / {totalSlides} slides completed</div>
 
+          {isInteractive && (
+            <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-2 text-[11px] text-blue-800">
+              Interactive Storyline course. Launch it in the main area, then mark it as completed to unlock the exam.
+            </div>
+          )}
+
           <div className="mt-4">
             {chapters.map((ch) => (
               <div key={ch.id} className="mb-3">
@@ -904,7 +1035,55 @@ export default function CourseDashboard() {
             <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">{done} / {totalSlides} slides</div>
           </div>
 
-          {activeSlide ? (
+          {isInteractive ? (
+            <div className="grid gap-3">
+              <div className="text-base md:text-lg font-semibold">{course?.title}</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">
+                Status: {interactiveStatus === "completed" ? "Completed" : interactiveStatus === "in_progress" ? "In progress" : "Not started"}
+                {interactiveLastSeen ? ` · Last seen ${new Date(interactiveLastSeen).toLocaleString()}` : ""}
+              </div>
+
+              {course?.interactive_path ? (
+                <div className="rounded-lg overflow-hidden ring-1 ring-[color:var(--color-light)]">
+                  <iframe
+                    src={course.interactive_path}
+                    title="Interactive course player"
+                    className="w-full h-[260px] md:h-[360px] bg-black"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <div className="text-sm text-red-700">Interactive entry path is not configured for this course.</div>
+              )}
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => completeInteractiveModule()}
+                  disabled={!activeSlide || completed.includes(activeSlide.id)}
+                  className="rounded-xl bg-[color:#0a1156] text-white px-5 py-2.5 font-semibold hover:opacity-90 disabled:opacity-60"
+                >
+                  {activeSlide && completed.includes(activeSlide.id) ? "Module marked completed" : "Mark interactive course as completed"}
+                </button>
+                {course?.interactive_path && (
+                  <a
+                    href={course.interactive_path}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-xl px-5 py-2.5 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50"
+                  >
+                    Open in new tab
+                  </a>
+                )}
+              </div>
+
+              {!!notice && (
+                <div role="status" aria-live="polite" className="mt-1 text-xs md:text-sm text-[#0a1156]">
+                  {notice}
+                </div>
+              )}
+            </div>
+          ) : activeSlide ? (
             <>
               <div className="flex items-start justify-between gap-3">
                 <div className="text-base md:text-lg font-semibold">{activeSlide.title}</div>
@@ -1010,7 +1189,7 @@ export default function CourseDashboard() {
       </div>
 
       {/* Sticky Bottom Action Bar (mobile) */}
-      {activeSlide && (
+      {activeSlide && !isInteractive && (
         <div className="sm:hidden fixed inset-x-0 bottom-0 z-40 bg-white/95 backdrop-blur border-t border-[color:var(--color-light)]">
           <div className="mx-auto max-w-screen-2xl px-4 py-2 grid grid-cols-3 gap-2">
             <button
@@ -1265,7 +1444,7 @@ export default function CourseDashboard() {
             )}
 
             <div className="mt-4 grid gap-4">
-              {finalExamQuestions.map((q, idx) => (
+              {(activeExamQuestions.length > 0 ? activeExamQuestions : finalExamQuestions).map((q, idx) => (
                 <div key={q.id} className="rounded-lg p-3 ring-1 ring-[var(--color-light)]">
                   <div className="font-medium text-sm">{idx + 1}. {q.prompt}</div>
                   <div className="mt-2 grid gap-2">
@@ -1316,10 +1495,27 @@ export default function CourseDashboard() {
                   Score: <b>{finalResult.correct}/{finalResult.total}</b> ({finalResult.scorePct}%)
                   {" · "}Pass mark: <b>{finalExam.pass_mark ?? 0}%</b>
                 </div>
-                <div className={`mt-1 inline-block px-2 py-0.5 rounded ${finalResult.passed ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                  {finalResult.passed ? "PASSED" : "NOT PASSED"}
-                </div>
+              <div className={`mt-1 inline-block px-2 py-0.5 rounded ${finalResult.passed ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                {finalResult.passed ? "PASSED" : "NOT PASSED"}
               </div>
+            </div>
+
+              {finalResult.passed && (
+                <div
+                  className={`rounded-lg p-3 text-sm ${
+                    certificateNotice?.type === "error"
+                      ? "bg-red-50 border border-red-200 text-red-800"
+                      : certificateNotice?.type === "success"
+                        ? "bg-green-50 border border-green-200 text-green-800"
+                        : "bg-blue-50 border border-blue-200 text-blue-900"
+                  }`}
+                >
+                  {certificateNotice?.message ?? "Visit your Dashboard to download your certificate."}
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    Need to edit the name on the certificate? Update it via the Dashboard before downloading.
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-lg p-3 ring-1 ring-[var(--color-light)]">
                 <div className="font-medium mb-2">Chapter Quiz Scores</div>

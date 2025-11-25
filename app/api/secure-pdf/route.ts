@@ -37,7 +37,7 @@ async function getAccessToken(req: NextRequest) {
   if (authHeader.toLowerCase().startsWith("bearer ")) {
     return authHeader.slice(7).trim();
   }
-  const jar = cookies();
+  const jar = await cookies();
   return jar.get("sb-access-token")?.value || "";
 }
 

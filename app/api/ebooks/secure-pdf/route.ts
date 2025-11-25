@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       token = authHeader.slice(7).trim();
     }
     if (!token) {
-      const jar = cookies();
+      const jar = await cookies();
       token = jar.get("sb-access-token")?.value || "";
     }
     if (!token) {

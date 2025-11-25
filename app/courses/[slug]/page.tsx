@@ -19,9 +19,9 @@ export const dynamic = "force-dynamic";
 export default async function CoursePreviewPage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  const { slug } = params;
+  const { slug } = await params;
 
   const sb = getSupabaseAdmin();
   const { data: course } = await sb
