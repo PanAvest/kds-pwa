@@ -101,6 +101,20 @@ function secondsToClock(s: number) {
   return `${m}:${String(ss).padStart(2, "0")}`;
 }
 const progressKey = (userId: string, courseId: string) => `pv.progress.${userId}.${courseId}`;
+const INTERACTIVE_HOST = process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://panavestkds.com";
+
+function resolveInteractiveUrl(path?: string | null) {
+  if (!path) return null;
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  try {
+    return new URL(trimmed, INTERACTIVE_HOST).toString();
+  } catch {
+    return trimmed;
+  }
+}
 
 /* ====================== Media Player ====================== */
 function VideoPlayer({
@@ -212,6 +226,7 @@ export default function CourseDashboard() {
       ADD_ATTR: ["style"], // allow inline styles similar to main site
     });
   }, [activeSlide?.body, activeSlide?.content]);
+  const interactiveUrl = useMemo(() => resolveInteractiveUrl(course?.interactive_path ?? null), [course?.interactive_path]);
 
   /* ========= Auth ========= */
   useEffect(() => {
@@ -1058,8 +1073,8 @@ export default function CourseDashboard() {
                 {interactiveLastSeen ? ` · Last seen ${new Date(interactiveLastSeen).toLocaleString()}` : ""}
               </div>
 
-              {course?.interactive_path ? (
-                <InteractivePlayer src={course.interactive_path} title="Interactive course player" />
+              {interactiveUrl ? (
+                <InteractivePlayer src={interactiveUrl} title="Interactive course player" />
               ) : (
                 <div className="text-sm text-red-700">Interactive entry path is not configured for this course.</div>
               )}
@@ -1073,9 +1088,9 @@ export default function CourseDashboard() {
                 >
                   {activeSlide && completed.includes(activeSlide.id) ? "Module marked completed" : "Mark interactive course as completed"}
                 </button>
-                {course?.interactive_path && (
+                {interactiveUrl && (
                   <a
-                    href={course.interactive_path}
+                    href={interactiveUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="rounded-xl px-5 py-2.5 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50"
