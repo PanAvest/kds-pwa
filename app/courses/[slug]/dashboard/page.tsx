@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { issueCertificateForCourse, IssueCertificateError } from "@/lib/client/issueCertificate";
 import InteractivePlayer from "@/components/InteractivePlayer";
 import DOMPurify from "dompurify";
+import he from "he";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -200,9 +201,11 @@ export default function CourseDashboard() {
   const initializedRef = useRef(false);
   const isInteractive = course?.delivery_mode === "interactive";
   const sanitizedHtml = useMemo(() => {
-    const html = activeSlide?.body ?? activeSlide?.content ?? "";
-    if (!html) return "";
-    return DOMPurify.sanitize(html, {
+    const raw = activeSlide?.body ?? activeSlide?.content ?? "";
+    if (!raw) return "";
+    const decoded = he.decode(raw);
+    return DOMPurify.sanitize(decoded, {
+      // Allow basic formatting; keep styles off to prevent inline color dumps
       FORBID_ATTR: ["style"],
       ALLOWED_ATTR: ["href", "src", "alt", "title", "target", "rel"],
     });
