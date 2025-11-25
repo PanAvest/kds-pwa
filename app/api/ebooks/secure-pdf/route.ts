@@ -174,6 +174,7 @@ export async function GET(req: NextRequest) {
       return respondDebug(404, "no-sample-url");
     }
 
+    // Try to materialize a URL (service key first, then public fallback)
     const svc = supabaseService();
     let signedUrl: string | null = null;
     try {
@@ -198,8 +199,14 @@ export async function GET(req: NextRequest) {
     }
 
     // 6) Fetch and stream the PDF
-    const upstream = await fetch(signedUrl, { cache: "no-store" });
-    if (!upstream.ok) {
+    let upstream: Response;
+    try {
+      upstream = await fetch(signedUrl, { cache: "no-store" });
+    } catch (err: any) {
+      console.error("secure-pdf fetch failed", err);
+      return respondDebug(502, "upstream-fetch-fail", { message: err?.message ?? String(err) });
+    }
+    if (!upstream.ok || !upstream.body) {
       console.error("secure-pdf upstream failed", upstream.status);
       return respondDebug(502, "upstream-fail", { upstreamStatus: upstream.status });
     }
