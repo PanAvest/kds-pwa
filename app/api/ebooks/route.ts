@@ -1,37 +1,43 @@
+// app/api/ebooks/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+const Ebook = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  title: z.string(),
+  description: z.string().nullable().optional(),
+  cover_url: z.string().url().nullable().optional(),
+  sample_url: z.string().url().nullable().optional(),
+  kpf_url: z.string().url().nullable().optional(),
+  price_cents: z.number().int(),
+  published: z.boolean()
+});
 
-export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const q = (searchParams.get("q") || "").trim();
-    const limit = Math.min(Number(searchParams.get("limit") || 24), 48);
-    const offset = Math.max(Number(searchParams.get("offset") || 0), 0);
+export async function GET() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !anon) throw new Error("Missing Supabase env");
+  const { data, error } = await supabase
+    .from("ebooks")
+    .select("*")
+    .eq("published", true)
+    .order("created_at", { ascending: false });
 
-    const supabase = createClient(url, anon, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-
-    let query = supabase
-      .from("ebooks")
-      .select("*", { count: "exact" })
-      .eq("published", true)
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return NextResponse.json(data ?? []);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to load e-books" }, { status: 500 });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const parsed = z.array(Ebook).safeParse(data ?? []);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid ebooks shape", issues: parsed.error.issues },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json(parsed.data, { status: 200 });
 }

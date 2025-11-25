@@ -1,4 +1,4 @@
-// app/api/ebooks/secure-pdf/route.ts (PWA)
+// app/api/ebooks/secure-pdf/route.ts (mirror main web app)
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
@@ -6,111 +6,25 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Create a Supabase client that runs RLS as the user (forward the access token)
 function supabaseForToken(accessToken: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    throw new Error("Missing Supabase env");
-  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   return createClient(url, anon, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-    global: {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    },
-  });
-}
-
-function supabaseService() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !service) return null;
-  return createClient(url, service, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
-}
-
-type ResolvedSource =
-  | { kind: "remote-url"; url: string }
-  | { kind: "storage"; bucket: string; objectPath: string };
-
-function resolveSource(filePath?: string | null): ResolvedSource | null {
-  if (!filePath) return null;
-  const trimmed = filePath.trim();
-  if (!trimmed) return null;
-
-  if (/^https?:\/\//i.test(trimmed)) {
-    try {
-      const parsed = new URL(trimmed);
-      const afterObject = parsed.pathname.split("/storage/v1/object/")[1];
-      if (afterObject) {
-        const parts = afterObject.split("/").filter(Boolean);
-        if (["public", "signed", "sign"].includes(parts[0])) parts.shift();
-        const [bucket, ...objParts] = parts;
-        if (bucket && objParts.length > 0) {
-          return { kind: "storage", bucket, objectPath: decodeURIComponent(objParts.join("/")) };
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    return { kind: "remote-url", url: trimmed };
-  }
-
-  const normalized = trimmed.replace(/^\/+/, "");
-  const [bucket, ...rest] = normalized.split("/").filter(Boolean);
-  if (bucket && rest.length > 0) {
-    return { kind: "storage", bucket, objectPath: rest.join("/") };
-  }
-  return null;
-}
-
-async function materializeSource(
-  source: ResolvedSource | null,
-  signer: ReturnType<typeof supabaseService> | ReturnType<typeof supabaseForToken> | null,
-  fallback: ReturnType<typeof supabaseForToken>
-) {
-  if (!source) return null;
-  if (source.kind === "remote-url") return source.url;
-
-  const client = (signer as any) || fallback;
-  if (!client) return null;
-
-  if (signer) {
-    try {
-      const { data, error } = await (signer as any).storage.from(source.bucket).createSignedUrl(source.objectPath, 60 * 30);
-      if (!error && data?.signedUrl) return data.signedUrl;
-    } catch (err) {
-      console.warn("secure-pdf signing failed", err);
-    }
-  }
-
-  const { data: pub } = (fallback as any).storage.from(source.bucket).getPublicUrl(source.objectPath);
-  if (pub?.publicUrl) return pub.publicUrl;
-  return null;
 }
 
 export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const ebookId = url.searchParams.get("ebookId");
-  const debug = url.searchParams.get("debug") === "1";
-
-  const respondDebug = (status: number, step: string, extra: Record<string, unknown> = {}) => {
-    if (!debug) {
-      return NextResponse.json({ error: step, ...extra }, { status });
-    }
-    return NextResponse.json({ step, ...extra }, { status });
-  };
-
   try {
+    const { searchParams } = new URL(req.url);
+    const ebookId = searchParams.get("ebookId");
     if (!ebookId) {
-      return respondDebug(400, "missing-ebookId");
+      return NextResponse.json({ error: "ebookId required" }, { status: 400 });
     }
 
-    // 1) Get access token from header or cookie
+    // 1) Get access token from Authorization header or cookie
     const authHeader = req.headers.get("authorization") || "";
     let token = "";
     if (authHeader.toLowerCase().startsWith("bearer ")) {
@@ -121,35 +35,32 @@ export async function GET(req: NextRequest) {
       token = jar.get("sb-access-token")?.value || "";
     }
     if (!token) {
-      return respondDebug(401, "no-token");
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const sb = supabaseForToken(token);
-
     // 2) Identify user
+    const sb = supabaseForToken(token);
     const { data: userInfo, error: userErr } = await sb.auth.getUser();
     if (userErr || !userInfo?.user) {
-      console.error("secure-pdf userErr", userErr);
-      return respondDebug(401, "user-fail", { message: userErr?.message ?? "Invalid session" });
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
     const userId = userInfo.user.id;
 
-    // 3) Load ebook
+    // 3) Load ebook. Keep selection minimal to avoid column errors.
     const { data: ebook, error: ebookErr } = await sb
       .from("ebooks")
-      .select("id, published, sample_url, file_path")
+      .select("id, published, sample_url")
       .eq("id", ebookId)
       .maybeSingle();
 
     if (ebookErr) {
-      console.error("secure-pdf ebookErr", ebookErr);
-      return respondDebug(500, "ebook-fail", { message: ebookErr.message });
+      return NextResponse.json({ error: `DB error: ${ebookErr.message}` }, { status: 500 });
     }
     if (!ebook || ebook.published !== true) {
-      return respondDebug(404, "ebook-not-found-or-unpublished");
+      return NextResponse.json({ error: "Ebook not found or not published" }, { status: 404 });
     }
 
-    // 4) Check purchase
+    // 4) Verify ownership in ebook_purchases (status must be 'paid')
     const { data: purchase, error: purchaseErr } = await sb
       .from("ebook_purchases")
       .select("status")
@@ -158,57 +69,25 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (purchaseErr) {
-      console.error("secure-pdf purchaseErr", purchaseErr);
-      return respondDebug(500, "purchase-fail", { message: purchaseErr.message });
+      return NextResponse.json({ error: `Purchase check failed: ${purchaseErr.message}` }, { status: 500 });
     }
 
     const isOwner = purchase?.status === "paid";
     if (!isOwner) {
-      return respondDebug(403, "not-purchased", { purchaseStatus: purchase?.status ?? null });
+      return NextResponse.json({ error: "Not purchased" }, { status: 403 });
     }
 
-    // 5) Pick the actual PDF source (support Supabase Storage paths)
-    const pdfSource = ebook.file_path || ebook.sample_url;
-    const resolved = resolveSource(pdfSource);
-    if (!resolved) {
-      return respondDebug(404, "no-sample-url");
+    // 5) Stream the PDF from sample_url (paid URL)
+    if (!ebook.sample_url) {
+      return NextResponse.json({ error: "No PDF URL configured for this ebook" }, { status: 404 });
     }
 
-    // Try to materialize a URL (service key first, then public fallback)
-    const svc = supabaseService();
-    let signedUrl: string | null = null;
-    try {
-      signedUrl = await materializeSource(resolved, svc, sb);
-    } catch (err: any) {
-      console.error("secure-pdf materializeSource error", err);
-      return respondDebug(500, "materialize-error", { message: err?.message ?? String(err) });
-    }
-    if (!signedUrl) {
-      return respondDebug(404, "pdf-missing");
-    }
-
-    if (debug) {
-      return respondDebug(200, "ok", {
-        userId,
-        ebookId,
-        pdfSource,
-        resolved,
-        signedUrl,
-        purchaseStatus: purchase?.status ?? null,
-      });
-    }
-
-    // 6) Fetch and stream the PDF
-    let upstream: Response;
-    try {
-      upstream = await fetch(signedUrl, { cache: "no-store" });
-    } catch (err: any) {
-      console.error("secure-pdf fetch failed", err);
-      return respondDebug(502, "upstream-fetch-fail", { message: err?.message ?? String(err) });
-    }
-    if (!upstream.ok || !upstream.body) {
-      console.error("secure-pdf upstream failed", upstream.status);
-      return respondDebug(502, "upstream-fail", { upstreamStatus: upstream.status });
+    const upstream = await fetch(ebook.sample_url, { cache: "no-store" });
+    if (!upstream.ok) {
+      return NextResponse.json(
+        { error: `Upstream fetch failed`, status: upstream.status },
+        { status: 502 }
+      );
     }
 
     const headers = new Headers();
@@ -218,8 +97,10 @@ export async function GET(req: NextRequest) {
     headers.set("X-Accel-Buffering", "no");
 
     return new Response(upstream.body, { status: 200, headers });
-  } catch (e: any) {
-    console.error("secure-pdf catch error", e);
-    return respondDebug(500, "catch", { message: e?.message ?? "Server error" });
+  } catch (e) {
+    return NextResponse.json(
+      { error: (e as Error).message || "Server error" },
+      { status: 500 }
+    );
   }
 }
