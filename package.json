@@ -21,6 +21,7 @@
     "classnames": "^2.5.1",
     "dompurify": "^3.3.0",
     "firebase": "^10.12.3",
+    "html2canvas": "^1.4.1",
     "he": "^1.2.0",
     "jspdf": "^3.0.4",
     "lucide-react": "^0.462.0",

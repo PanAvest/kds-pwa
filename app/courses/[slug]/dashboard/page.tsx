@@ -7,8 +7,6 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { issueCertificateForCourse, IssueCertificateError } from "@/lib/client/issueCertificate";
 import InteractivePlayer from "@/components/InteractivePlayer";
-import DOMPurify from "dompurify";
-import he from "he";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -214,18 +212,7 @@ export default function CourseDashboard() {
   const [certificateNotice, setCertificateNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const initializedRef = useRef(false);
   const isInteractive = course?.delivery_mode === "interactive";
-  const sanitizedHtml = useMemo(() => {
-    const raw = activeSlide?.body ?? activeSlide?.content ?? "";
-    if (!raw) return "";
-    // Decode entities (handles double-encoded bodies) then sanitize
-    let decoded = he.decode(raw);
-    if (decoded.includes("&lt;") || decoded.includes("&gt;")) {
-      decoded = he.decode(decoded);
-    }
-    return DOMPurify.sanitize(decoded, {
-      ADD_ATTR: ["style"], // allow inline styles similar to main site
-    });
-  }, [activeSlide?.body, activeSlide?.content]);
+  const slideHtml = useMemo(() => activeSlide?.body ?? activeSlide?.content ?? "", [activeSlide?.body, activeSlide?.content]);
   const interactiveUrl = useMemo(() => resolveInteractiveUrl(course?.interactive_path ?? null), [course?.interactive_path]);
 
   /* ========= Auth ========= */
@@ -1166,10 +1153,10 @@ export default function CourseDashboard() {
                 return null;
               })()}
 
-              {sanitizedHtml && (
+              {slideHtml && (
                 <div
                   className="prose prose-sm sm:prose max-w-none mt-4 text-[0.95rem] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                  dangerouslySetInnerHTML={{ __html: slideHtml }}
                 />
               )}
 
