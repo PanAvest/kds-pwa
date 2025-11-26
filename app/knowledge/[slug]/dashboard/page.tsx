@@ -3,6 +3,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { flushSync } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { issueCertificateForCourse, IssueCertificateError } from "@/lib/client/issueCertificate";
@@ -99,7 +100,7 @@ function secondsToClock(s: number) {
   return `${m}:${String(ss).padStart(2, "0")}`;
 }
 const progressKey = (userId: string, courseId: string) => `pv.progress.${userId}.${courseId}`;
-// Base host for interactive assets. Falls back to current origin if override is not set.
+// Interactive modules (e.g. GhIE Business Ethics at /interactive/ghie-business-ethics/story_html5.html) are hosted on the main PanAvest site, so we resolve `interactive_path` via NEXT_PUBLIC_MAIN_SITE_ORIGIN and fall back to the current origin when it is unset.
 const INTERACTIVE_HOST =
   process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN ||
   (typeof window !== "undefined" && window.location?.origin ? window.location.origin : "http://localhost:3000");
@@ -535,7 +536,9 @@ export default function CourseDashboard() {
         setTimeout(() => setNotice(""), 2200);
         return;
       }
-      setCompleted(prev => (prev.includes(slide.id) ? prev : [...prev, slide.id]));
+      flushSync(() => {
+        setCompleted(prev => (prev.includes(slide.id) ? prev : [...prev, slide.id]));
+      });
       const key = progressKey(userId, course.id);
       const existing = JSON.parse(localStorage.getItem(key) ?? "[]") as string[];
       const merged = Array.from(new Set([...existing, slide.id]));
