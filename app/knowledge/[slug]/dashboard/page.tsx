@@ -1066,11 +1066,16 @@ export default function CourseDashboard() {
                 {interactiveLastSeen ? ` · Last seen ${new Date(interactiveLastSeen).toLocaleString()}` : ""}
               </div>
 
-              {interactiveUrl ? (
-                <InteractivePlayer src={interactiveUrl} title="Interactive course player" />
-              ) : (
-                <div className="text-sm text-red-700">Interactive entry path is not configured for this course.</div>
-              )}
+            {interactiveUrl ? (
+              <InteractivePlayer src={interactiveUrl} title="Interactive course player" />
+            ) : (
+              <div className="text-sm text-red-700">Interactive entry path is not configured for this course.</div>
+            )}
+            {interactiveUrl && (
+              <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                Current interactive URL: {interactiveUrl}
+              </div>
+            )}
 
               <div className="flex flex-wrap gap-3">
                 <button
