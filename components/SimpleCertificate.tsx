@@ -81,13 +81,18 @@ const SimpleCertificate = forwardRef<HTMLDivElement, CertificateProps>(
 
     const [downloading, setDownloading] = useState(false);
 
-    const triggerDownload = (dataUrl: string, filename: string) => {
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    const isCapacitorNative = () =>
+      typeof window !== "undefined" && Boolean((window as any).Capacitor?.isNativePlatform);
+
+    const openUrlInNativeViewer = async (url: string) => {
+      if (typeof window === "undefined") return;
+      const cap: any = (window as any).Capacitor;
+      const browserPlugin = cap?.Browser ?? cap?.Plugins?.Browser;
+      if (browserPlugin?.open) {
+        await browserPlugin.open({ url });
+      } else {
+        window.open(url, "_blank");
+      }
     };
 
     const handleDownloadPdf = async () => {
@@ -114,38 +119,41 @@ const SimpleCertificate = forwardRef<HTMLDivElement, CertificateProps>(
         const imgData = canvas.toDataURL("image/png");
         const baseName = resolvedId ? `PanAvest-Certificate-${resolvedId}` : "PanAvest-Certificate";
 
+        const { jsPDF } = await import("jspdf");
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const imgProps = { width: canvas.width, height: canvas.height };
+        const imgRatio = imgProps.height / imgProps.width;
+        const targetWidth = pageWidth;
+        const targetHeight = targetWidth * imgRatio;
+        let drawWidth = targetWidth;
+        let drawHeight = targetHeight;
+        let marginTop = 0;
+        if (drawHeight > pageHeight) {
+          drawHeight = pageHeight;
+          drawWidth = drawHeight / imgRatio;
+        } else {
+          marginTop = (pageHeight - drawHeight) / 2;
+        }
+        const marginLeft = (pageWidth - drawWidth) / 2;
+        pdf.addImage(imgData, "PNG", marginLeft, marginTop, drawWidth, drawHeight, undefined, "FAST");
+
+        const blob = pdf.output("blob");
+        const blobUrl = URL.createObjectURL(blob);
         try {
-          const { jsPDF } = await import("jspdf");
-          const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-          const pageWidth = 210;
-          const pageHeight = 297;
-          const imgProps = { width: canvas.width, height: canvas.height };
-          const imgRatio = imgProps.height / imgProps.width;
-          const targetWidth = pageWidth;
-          const targetHeight = targetWidth * imgRatio;
-          let drawWidth = targetWidth;
-          let drawHeight = targetHeight;
-          let marginTop = 0;
-          if (drawHeight > pageHeight) {
-            drawHeight = pageHeight;
-            drawWidth = drawHeight / imgRatio;
+          if (isCapacitorNative()) {
+            await openUrlInNativeViewer(blobUrl);
           } else {
-            marginTop = (pageHeight - drawHeight) / 2;
+            pdf.save(`${baseName}.pdf`);
           }
-          const marginLeft = (pageWidth - drawWidth) / 2;
-          pdf.addImage(imgData, "PNG", marginLeft, marginTop, drawWidth, drawHeight, undefined, "FAST");
-          pdf.save(`${baseName}.pdf`);
-        } catch (pdfErr) {
-          console.warn("PDF generation failed; downloading PNG instead.", pdfErr);
-          triggerDownload(imgData, `${baseName}.png`);
-          if (typeof window !== "undefined") {
-            window.alert("PDF download failed. We saved the certificate as an image instead.");
-          }
+        } finally {
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         }
       } catch (err) {
         console.error("Certificate PDF generation failed", err);
         if (typeof window !== "undefined") {
-            window.alert("We could not generate the certificate. Please keep the preview open and try again.");
+          window.alert("We could not generate the certificate. Please keep the preview open and try again.");
         }
       } finally {
         setDownloading(false);
@@ -153,8 +161,8 @@ const SimpleCertificate = forwardRef<HTMLDivElement, CertificateProps>(
     };
 
   return (
-    <div className="w-full">
-        <div
+    <div className="w-full px-3 sm:px-0">
+      <div
         ref={(el) => {
           if (typeof ref === "function") ref(el);
           else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
@@ -194,15 +202,15 @@ const SimpleCertificate = forwardRef<HTMLDivElement, CertificateProps>(
             <div className="flex-1 bg-white px-10 py-8 flex flex-col justify-between">
               <div className="text-center">
                 <div className="text-xs text-gray-500 uppercase tracking-[0.2em]">Proudly Presented To</div>
-                <div className="mt-3 text-5xl font-serif font-bold" data-testid="recipient">
+                <div className="mt-3 text-4xl sm:text-5xl font-serif font-bold break-words" data-testid="recipient">
                   {recipient}
                 </div>
                 <div className="mt-4 text-sm text-gray-600">for successfully completing</div>
-                <div className="mt-2 text-2xl italic" data-testid="course">
+                <div className="mt-2 text-xl sm:text-2xl italic break-words" data-testid="course">
                   {course}
                 </div>
                 {blurb && (
-                  <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-gray-700" data-testid="blurb">
+                  <p className="mx-auto mt-4 max-w-2xl text-sm sm:text-base leading-7 text-gray-700 break-words" data-testid="blurb">
                     {blurb}
                   </p>
                 )}
@@ -243,16 +251,16 @@ const SimpleCertificate = forwardRef<HTMLDivElement, CertificateProps>(
         </div>
 
       {showPrint && (
-        <div className="mt-3 flex justify-end relative z-50 pointer-events-auto">
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={downloading}
-            className="rounded px-3 py-1 text-xs border hover:bg-gray-50 disabled:opacity-60"
-          >
-            {downloading ? "Preparing PDF…" : "Download certificate (PDF)"}
-          </button>
-        </div>
+      <div className="mt-3 flex justify-end relative z-50 pointer-events-auto">
+        <button
+          type="button"
+          onClick={handleDownloadPdf}
+          disabled={downloading}
+          className="rounded px-3 py-1.5 text-xs border hover:bg-gray-50 disabled:opacity-60"
+        >
+          {downloading ? "Preparing PDF…" : "Download certificate (PDF)"}
+        </button>
+      </div>
       )}
     </div>
   );

@@ -516,6 +516,17 @@ export default function DashboardPage() {
 
   const makeKdsCertId = (u: string, courseId?: string) => `KDS-${u.slice(0, 8).toUpperCase()}${courseId ? "-" + courseId.slice(0, 6).toUpperCase() : ""}`;
   const origin = typeof window !== "undefined" && window.location ? window.location.origin : "https://kdslearning.com";
+  const isCapacitorNative = () => typeof window !== "undefined" && Boolean((window as any).Capacitor?.isNativePlatform);
+  const openUrlInNativeViewer = async (url: string) => {
+    if (typeof window === "undefined") return;
+    const cap: any = (window as any).Capacitor;
+    const browserPlugin = cap?.Browser ?? cap?.Plugins?.Browser;
+    if (browserPlugin?.open) {
+      await browserPlugin.open({ url });
+    } else {
+      window.open(url, "_blank");
+    }
+  };
 
   const downloadCertPdf = async (
     certId: string,
@@ -666,7 +677,17 @@ export default function DashboardPage() {
       }
 
       const filename = certNumber ? `PanAvest-Certificate-${certNumber}.pdf` : "PanAvest-Certificate.pdf";
-      doc.save(filename);
+      const blob = doc.output("blob");
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        if (isCapacitorNative()) {
+          await openUrlInNativeViewer(blobUrl);
+        } else {
+          doc.save(filename);
+        }
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      }
     } catch (err) {
       console.error("Certificate PDF generation failed", err);
       if (typeof window !== "undefined") {
