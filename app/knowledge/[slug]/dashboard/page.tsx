@@ -100,10 +100,11 @@ function secondsToClock(s: number) {
   return `${m}:${String(ss).padStart(2, "0")}`;
 }
 const progressKey = (userId: string, courseId: string) => `pv.progress.${userId}.${courseId}`;
-// Interactive modules (e.g. GhIE Business Ethics at /interactive/ghie-business-ethics/story_html5.html) are hosted on the main PanAvest site, so we resolve `interactive_path` via NEXT_PUBLIC_MAIN_SITE_ORIGIN and fall back to the current origin when it is unset.
-const INTERACTIVE_HOST =
-  process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN ||
+const CURRENT_ORIGIN =
   (typeof window !== "undefined" && window.location?.origin ? window.location.origin : "http://localhost:3000");
+// Interactive modules (e.g. GhIE Business Ethics at /interactive/ghie-business-ethics/story_html5.html) are hosted on the main PanAvest site; we resolve `interactive_path` via NEXT_PUBLIC_MAIN_SITE_ORIGIN unless the path starts with /interactive/, in which case we keep the current origin.
+const INTERACTIVE_HOST =
+  process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || CURRENT_ORIGIN;
 
 function resolveInteractiveUrl(path?: string | null) {
   if (!path) return null;
@@ -111,6 +112,13 @@ function resolveInteractiveUrl(path?: string | null) {
   if (!trimmed) return null;
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  if (trimmed.startsWith("/interactive/")) {
+    try {
+      return new URL(trimmed, CURRENT_ORIGIN).toString();
+    } catch {
+      return trimmed;
+    }
+  }
   try {
     return new URL(trimmed, INTERACTIVE_HOST).toString();
   } catch {
@@ -1070,11 +1078,6 @@ export default function CourseDashboard() {
               <InteractivePlayer src={interactiveUrl} title="Interactive course player" />
             ) : (
               <div className="text-sm text-red-700">Interactive entry path is not configured for this course.</div>
-            )}
-            {interactiveUrl && (
-              <div className="text-[10px] text-[color:var(--color-text-muted)]">
-                Current interactive URL: {interactiveUrl}
-              </div>
             )}
 
               <div className="flex flex-wrap gap-3">
