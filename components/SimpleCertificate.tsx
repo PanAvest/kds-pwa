@@ -1,6 +1,7 @@
 "use client";
 
 import React, { forwardRef, useId, useMemo, useRef, useState } from "react";
+import { isNative, savePdfToDevice } from "@/lib/nativeDownload";
 
 /**
  * SimpleCertificate (A4 preview + print-only)
@@ -81,20 +82,6 @@ const SimpleCertificate = forwardRef<HTMLDivElement, CertificateProps>(
 
     const [downloading, setDownloading] = useState(false);
 
-    const isCapacitorNative = () =>
-      typeof window !== "undefined" && Boolean((window as any).Capacitor?.isNativePlatform);
-
-    const openUrlInNativeViewer = async (url: string) => {
-      if (typeof window === "undefined") return;
-      const cap: any = (window as any).Capacitor;
-      const browserPlugin = cap?.Browser ?? cap?.Plugins?.Browser;
-      if (browserPlugin?.open) {
-        await browserPlugin.open({ url });
-      } else {
-        window.open(url, "_blank");
-      }
-    };
-
     const handleDownloadPdf = async () => {
       try {
         if (downloading) return;
@@ -119,8 +106,8 @@ const SimpleCertificate = forwardRef<HTMLDivElement, CertificateProps>(
         const imgData = canvas.toDataURL("image/png");
         const baseName = resolvedId ? `PanAvest-Certificate-${resolvedId}` : "PanAvest-Certificate";
 
-        const { jsPDF } = await import("jspdf");
-        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
         const pageWidth = 210;
         const pageHeight = 297;
         const imgProps = { width: canvas.width, height: canvas.height };
@@ -139,17 +126,13 @@ const SimpleCertificate = forwardRef<HTMLDivElement, CertificateProps>(
         const marginLeft = (pageWidth - drawWidth) / 2;
         pdf.addImage(imgData, "PNG", marginLeft, marginTop, drawWidth, drawHeight, undefined, "FAST");
 
-        const blob = pdf.output("blob");
-        const blobUrl = URL.createObjectURL(blob);
-        try {
-          if (isCapacitorNative()) {
-            await openUrlInNativeViewer(blobUrl);
-          } else {
-            pdf.save(`${baseName}.pdf`);
-          }
-        } finally {
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-        }
+    const filename = `${baseName}.pdf`;
+    if (isNative()) {
+      const blob = pdf.output("blob");
+      await savePdfToDevice(filename, blob);
+    } else {
+      pdf.save(filename);
+    }
       } catch (err) {
         console.error("Certificate PDF generation failed", err);
         if (typeof window !== "undefined") {
