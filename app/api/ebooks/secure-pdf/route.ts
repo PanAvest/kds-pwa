@@ -16,83 +16,6 @@ function supabaseForToken(accessToken: string) {
   });
 }
 
-// Service client for signing storage URLs (if available)
-function supabaseService() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !service) return null;
-  return createClient(url, service, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-}
-
-type ResolvedSource =
-  | { kind: "remote-url"; url: string }
-  | { kind: "storage"; bucket: string; objectPath: string };
-
-function resolveSource(filePath?: string | null): ResolvedSource | null {
-  if (!filePath) return null;
-  const trimmed = filePath.trim();
-  if (!trimmed) return null;
-
-  // Full URL?
-  if (/^https?:\/\//i.test(trimmed)) {
-    try {
-      const parsed = new URL(trimmed);
-      const afterObject = parsed.pathname.split("/storage/v1/object/")[1];
-      if (afterObject) {
-        const parts = afterObject.split("/").filter(Boolean);
-        if (["public", "signed", "sign"].includes(parts[0])) parts.shift();
-        const [bucket, ...objParts] = parts;
-        if (bucket && objParts.length > 0) {
-          return { kind: "storage", bucket, objectPath: decodeURIComponent(objParts.join("/")) };
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    return { kind: "remote-url", url: trimmed };
-  }
-
-  // Bucket/path format
-  const normalized = trimmed.replace(/^\/+/, "");
-  const [bucket, ...rest] = normalized.split("/").filter(Boolean);
-  if (bucket && rest.length > 0) {
-    return { kind: "storage", bucket, objectPath: rest.join("/") };
-  }
-
-  return null;
-}
-
-async function materializeSource(
-  source: ResolvedSource | null,
-  signer: ReturnType<typeof supabaseService> | null,
-  fallback: ReturnType<typeof supabaseForToken>
-): Promise<string | null> {
-  if (!source) return null;
-  if (source.kind === "remote-url") return source.url;
-
-  // Try signed URL with service key
-  if (signer) {
-    try {
-      const { data, error } = await (signer as any).storage.from(source.bucket).createSignedUrl(source.objectPath, 60 * 30);
-      if (!error && data?.signedUrl) return data.signedUrl;
-    } catch (err) {
-      console.warn("secure-pdf signing failed", err);
-    }
-  }
-
-  // Fallback: public URL via anon/user client
-  try {
-    const { data: pub } = (fallback as any).storage.from(source.bucket).getPublicUrl(source.objectPath);
-    if (pub?.publicUrl) return pub.publicUrl;
-  } catch (err) {
-    console.warn("secure-pdf publicUrl failed", err);
-  }
-
-  return null;
-}
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const ebookId = searchParams.get("ebookId");
@@ -161,16 +84,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Not purchased", step: "not-owner", purchaseStatus: purchase?.status ?? null }, { status: 403 });
     }
 
-    // 5) Resolve source (prefer file_path, fallback sample_url)
-    const source = resolveSource(ebook.file_path || ebook.sample_url);
-    if (!source) {
-      return NextResponse.json({ error: "No PDF URL configured for this ebook", step: "no-source" }, { status: 404 });
+    // 5) Resolve source: match main site by preferring sample_url, but allow file_path as a fallback if provided.
+    const candidates = [ebook.sample_url, ebook.file_path].filter(Boolean) as string[];
+    let materialized: string | null = null;
+    for (const candidate of candidates) {
+      try {
+        const trimmed = candidate.trim();
+        if (!trimmed) continue;
+        if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("//")) {
+          materialized = trimmed.startsWith("//") ? `https:${trimmed}` : trimmed;
+        } else {
+          // Treat as storage path; use public URL helper (no service key dependency like main site).
+          const pathParts = trimmed.replace(/^\/+/, "").split("/").filter(Boolean);
+          const bucket = pathParts.shift();
+          const objectPath = pathParts.join("/");
+          if (bucket && objectPath) {
+            const { data: pub } = (sb as any).storage.from(bucket).getPublicUrl(objectPath);
+            materialized = pub?.publicUrl || null;
+          }
+        }
+      } catch {
+        /* try next candidate */
+      }
+      if (materialized) break;
     }
 
-    const signer = supabaseService();
-    const materialized = await materializeSource(source, signer, sb);
     if (!materialized) {
-      return NextResponse.json({ error: "PDF missing or inaccessible", step: "pdf-missing" }, { status: 404 });
+      return NextResponse.json({ error: "No PDF URL configured for this ebook", step: "no-source" }, { status: 404 });
     }
 
     if (debug) {

@@ -99,7 +99,10 @@ function secondsToClock(s: number) {
   return `${m}:${String(ss).padStart(2, "0")}`;
 }
 const progressKey = (userId: string, courseId: string) => `pv.progress.${userId}.${courseId}`;
-const INTERACTIVE_HOST = process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://panavestkds.com";
+// Base host for interactive assets. Falls back to current origin if override is not set.
+const INTERACTIVE_HOST =
+  process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN ||
+  (typeof window !== "undefined" && window.location?.origin ? window.location.origin : "http://localhost:3000");
 
 function resolveInteractiveUrl(path?: string | null) {
   if (!path) return null;
@@ -248,7 +251,7 @@ export default function CourseDashboard() {
         .eq("course_id", c.id)
         .maybeSingle<{ paid: boolean | null }>();
       if (enrErr || !enr || enr.paid !== true) {
-        router.replace(`/courses/${c.slug}/enroll`);
+        router.replace(`/knowledge/${c.slug}/enroll`);
         return;
       }
 
