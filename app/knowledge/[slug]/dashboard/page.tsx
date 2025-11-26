@@ -1,12 +1,229 @@
 // app/courses/[slug]/dashboard/page.tsx
-import { redirect } from "next/navigation";
+"use client";
 
-export const dynamic = "force-dynamic";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
+import { issueCertificateForCourse, IssueCertificateError } from "@/lib/client/issueCertificate";
+import InteractivePlayer from "@/components/InteractivePlayer";
 
-export default async function CourseDashboardRedirect({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  redirect(`/knowledge/${encodeURIComponent(slug)}/dashboard`);
+/* ------------------------------------------------------------------ */
+/* Optional: if you already have "@/components/ProgressBar",           */
+/* replace this inline component with:                                 */
+/*   import ProgressBar from "@/components/ProgressBar";               */
+/* ------------------------------------------------------------------ */
+function ProgressBar({ value = 0 }: { value: number }) {
+  const pct = Math.max(0, Math.min(100, value));
+  return (
+    <div className="h-2 w-full rounded-full bg-[color:var(--color-light)]/60 overflow-hidden">
+      <div
+        className="h-full bg-[color:#0a1156] transition-[width] duration-300"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
 }
+
+/* ========================= Types ========================= */
+type Course = { id: string; slug: string; title: string; img: string | null; delivery_mode?: string | null; interactive_path?: string | null };
+type Chapter = { id: string; title: string; order_index: number; intro_video_url: string | null };
+type Slide = {
+  id: string;
+  chapter_id: string;
+  title: string;
+  order_index: number;
+  intro_video_url: string | null;
+  asset_url: string | null;
+  body: string | null;
+  // legacy fields (supported)
+  video_url?: string | null;
+  content?: string | null;
+};
+type QuizQuestion = {
+  id: string;
+  chapter_id: string;
+  question: string;
+  options: string[]; // json[]
+  correct_index: number; // 0-based
+};
+type QuizSetting = {
+  chapter_id: string;
+  time_limit_seconds: number | null;
+  num_questions: number | null;
+};
+type Exam = {
+  id: string;
+  course_id: string;
+  title: string | null;
+  pass_mark: number | null;
+  time_limit_minutes: number | null;
+   num_questions?: number | null;
+};
+type ExamQuestion = {
+  id: string;
+  exam_id: string;
+  prompt: string;
+  options: string[];
+  correct_index: number;
+};
+type ChapterQuizScore = {
+  chapterId: string;
+  chapterTitle: string;
+  scorePct: number | null;
+  correctCount: number | null;
+  totalCount: number | null;
+  completedAt: string | null;
+};
+type InteractiveState = "not_started" | "in_progress" | "completed";
+
+/* ========================= Utils ========================= */
+function shuffle<T>(arr: T[]) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function shuffleOptionsWithAnswer(options: string[], correctIndex: number) {
+  const mapped = options.map((opt, idx) => ({ opt, idx }));
+  const shuffled = shuffle(mapped);
+  const newOptions = shuffled.map((s) => s.opt);
+  const newIndex = Math.max(0, shuffled.findIndex((s) => s.idx === correctIndex));
+  return { newOptions, newIndex: newIndex === -1 ? 0 : newIndex };
+}
+function secondsToClock(s: number) {
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${m}:${String(ss).padStart(2, "0")}`;
+}
+const progressKey = (userId: string, courseId: string) => `pv.progress.${userId}.${courseId}`;
+const INTERACTIVE_HOST = process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://panavestkds.com";
+
+function resolveInteractiveUrl(path?: string | null) {
+  if (!path) return null;
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  try {
+    return new URL(trimmed, INTERACTIVE_HOST).toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+/* ====================== Media Player ====================== */
+function VideoPlayer({
+  src,
+  poster,
+}: {
+  src: string;
+  poster?: string | null;
+}) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const onLoadedMetadata = () => {
+    try {
+      if (!ref.current) return;
+      if (ref.current.currentTime === 0) ref.current.currentTime = 0.001;
+    } catch {}
+  };
+  return (
+    <div className="w-full rounded-lg overflow-hidden">
+      <div className="relative w-full aspect-video bg-black">
+        {!error ? (
+          <video
+            ref={ref}
+            className="absolute inset-0 h-full w-full object-contain"
+            playsInline
+            preload="metadata"
+            controls
+            controlsList="nodownload"
+            crossOrigin="anonymous"
+            muted={false}
+            poster={poster ?? undefined}
+            src={src}
+            onLoadedMetadata={onLoadedMetadata}
+            onError={() => setError("The video couldn't load here. Use the link below to open in a new tab.")}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="text-center text-xs md:text-sm text-white/90">{error}</div>
+          </div>
+        )}
+      </div>
+      {error && (
+        <div className="mt-2 text-xs">
+          <a href={src} target="_blank" rel="noreferrer" className="underline break-all">
+            Open the video in a new tab
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ====================== Main Component ====================== */
+export default function CourseDashboard() {
+  const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
+
+  /* Auth & user */
+  const [userId, setUserId] = useState("");
+  const [userEmail, setUserEmail] = useState<string>("");
+
+  /* Data state */
+  const [course, setCourse] = useState<Course | null>(null);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [slides, setSlides] = useState<Slide[]>([]);
+  const [completed, setCompleted] = useState<string[]>([]);
+  const [activeSlide, setActiveSlide] = useState<Slide | null>(null);
+  const [interactiveStatus, setInteractiveStatus] = useState<InteractiveState>("not_started");
+  const [interactiveLastSeen, setInteractiveLastSeen] = useState<string | null>(null);
+
+  /* Quiz/Exam state */
+  const [quizByChapter, setQuizByChapter] = useState<Record<string, QuizQuestion[]>>({});
+  const [quizSettings, setQuizSettings] = useState<Record<string, QuizSetting>>({});
+  const [completedQuizzes, setCompletedQuizzes] = useState<string[]>([]);
+  const [chapterScores, setChapterScores] = useState<ChapterQuizScore[]>([]);
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [quizChapterId, setQuizChapterId] = useState<string | null>(null);
+  const [quizItems, setQuizItems] = useState<QuizQuestion[]>([]);
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, number | null>>({});
+  const [quizTimeLeft, setQuizTimeLeft] = useState<number>(0);
+  const quizTickRef = useRef<number | null>(null);
+
+  const [finalExam, setFinalExam] = useState<Exam | null>(null);
+  const [finalExamQuestions, setFinalExamQuestions] = useState<ExamQuestion[]>([]);
+  const [activeExamQuestions, setActiveExamQuestions] = useState<ExamQuestion[]>([]);
+  const [finalExamOpen, setFinalExamOpen] = useState(false);
+  const [finalAnswers, setFinalAnswers] = useState<Record<string, number | null>>({});
+  const [finalTimeLeft, setFinalTimeLeft] = useState<number>(0);
+  const finalTickRef = useRef<number | null>(null);
+  const [finalAttemptExists, setFinalAttemptExists] = useState<boolean>(false);
+
+  /* UI state */
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<string>("");
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [chaptersOpen, setChaptersOpen] = useState(false); // slide-over
+  const [certificateNotice, setCertificateNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const initializedRef = useRef(false);
+  const isInteractive = course?.delivery_mode === "interactive";
+  const slideHtml = useMemo(() => activeSlide?.body ?? activeSlide?.content ?? "", [activeSlide?.body, activeSlide?.content]);
+  const interactiveUrl = useMemo(() => resolveInteractiveUrl(course?.interactive_path ?? null), [course?.interactive_path]);
+
+  /* ========= Auth ========= */
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/auth/sign-in"); return; }
+      setUserId(user.id);
+      setUserEmail(user.email ?? "");
+    })();
+  }, [router]);
 
   /* ========= Load data ========= */
   useEffect(() => {

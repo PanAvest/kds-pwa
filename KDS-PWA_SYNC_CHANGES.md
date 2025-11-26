@@ -1,6 +1,9 @@
 # KDS-PWA sync changes
 
-- app/courses/[slug]/dashboard/page.tsx — render slide HTML exactly like the main site by injecting the stored `body`/`content` without extra sanitization/decoding so rich formatting shows in the dashboard.
+- app/courses/[slug]/dashboard/page.tsx — now simply redirects to the knowledge route for parity with the main site.
+- app/knowledge/[slug]/dashboard/page.tsx — hosts the full dashboard (copied from the former courses dashboard) that renders slide HTML with `dangerouslySetInnerHTML`, handles interactive mode, quizzes, final exam, and certificate issuance.
+- app/courses/[slug]/page.tsx — now redirects to the knowledge slug, matching the main-site routing pattern.
+- app/knowledge/[slug]/page.tsx — new knowledge preview page (copied from the former courses preview) so content is served under /knowledge like the web app.
 - components/SimpleCertificate.tsx — replaced with the main web app’s certificate preview/downloader (html2canvas + jsPDF, QR options, print-safe styling) to mirror certificate behaviour on mobile.
 - package.json, package-lock.json — added the `html2canvas` dependency required by the updated certificate component.
 - app/ebooks/[slug]/page.tsx — removed a debug secure-PDF log so ebook access matches the main site’s flow.
