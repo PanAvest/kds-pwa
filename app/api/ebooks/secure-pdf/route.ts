@@ -1,4 +1,4 @@
-// app/api/ebooks/secure-pdf/route.ts (mirror main web app)
+// app/api/ebooks/secure-pdf/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
@@ -17,18 +17,11 @@ function supabaseForToken(accessToken: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const ebookId = searchParams.get("ebookId");
-  const debug = searchParams.get("debug") === "1";
-
-  const respond = (status: number, step: string, extra: Record<string, unknown> = {}) => {
-    if (!debug && status === 200) return null; // will stream PDF
-    return NextResponse.json({ step, ...extra }, { status });
-  };
-
   try {
+    const { searchParams } = new URL(req.url);
+    const ebookId = searchParams.get("ebookId");
     if (!ebookId) {
-      return NextResponse.json({ error: "ebookId required", step: "missing-ebookId" }, { status: 400 });
+      return NextResponse.json({ error: "ebookId required" }, { status: 400 });
     }
 
     // 1) Get access token from Authorization header or cookie
@@ -42,29 +35,29 @@ export async function GET(req: NextRequest) {
       token = jar.get("sb-access-token")?.value || "";
     }
     if (!token) {
-      return NextResponse.json({ error: "Not authenticated", step: "no-token" }, { status: 401 });
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     // 2) Identify user
     const sb = supabaseForToken(token);
     const { data: userInfo, error: userErr } = await sb.auth.getUser();
     if (userErr || !userInfo?.user) {
-      return NextResponse.json({ error: "Invalid session", step: "user-auth" }, { status: 401 });
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
     const userId = userInfo.user.id;
 
-    // 3) Load ebook (minimal columns)
+    // 3) Load ebook. Keep selection minimal to avoid column errors.
     const { data: ebook, error: ebookErr } = await sb
       .from("ebooks")
-      .select("id, published, sample_url, file_path")
+      .select("id, published, sample_url")
       .eq("id", ebookId)
       .maybeSingle();
 
     if (ebookErr) {
-      return NextResponse.json({ error: ebookErr.message, step: "ebook-db" }, { status: 500 });
+      return NextResponse.json({ error: `DB error: ${ebookErr.message}` }, { status: 500 });
     }
     if (!ebook || ebook.published !== true) {
-      return NextResponse.json({ error: "Ebook not found or not published", step: "ebook-not-found" }, { status: 404 });
+      return NextResponse.json({ error: "Ebook not found or not published" }, { status: 404 });
     }
 
     // 4) Verify ownership in ebook_purchases (status must be 'paid')
@@ -76,60 +69,25 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (purchaseErr) {
-      return NextResponse.json({ error: purchaseErr.message, step: "purchase-db" }, { status: 500 });
+      return NextResponse.json({ error: `Purchase check failed: ${purchaseErr.message}` }, { status: 500 });
     }
 
     const isOwner = purchase?.status === "paid";
     if (!isOwner) {
-      return NextResponse.json({ error: "Not purchased", step: "not-owner", purchaseStatus: purchase?.status ?? null }, { status: 403 });
+      return NextResponse.json({ error: "Not purchased" }, { status: 403 });
     }
 
-    // 5) Resolve source: match main site by preferring sample_url, but allow file_path as a fallback if provided.
-    const candidates = [ebook.sample_url, ebook.file_path].filter(Boolean) as string[];
-    let materialized: string | null = null;
-    for (const candidate of candidates) {
-      try {
-        const trimmed = candidate.trim();
-        if (!trimmed) continue;
-        if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("//")) {
-          materialized = trimmed.startsWith("//") ? `https:${trimmed}` : trimmed;
-        } else {
-          // Treat as storage path; use public URL helper (no service key dependency like main site).
-          const pathParts = trimmed.replace(/^\/+/, "").split("/").filter(Boolean);
-          const bucket = pathParts.shift();
-          const objectPath = pathParts.join("/");
-          if (bucket && objectPath) {
-            const { data: pub } = (sb as any).storage.from(bucket).getPublicUrl(objectPath);
-            materialized = pub?.publicUrl || null;
-          }
-        }
-      } catch {
-        /* try next candidate */
-      }
-      if (materialized) break;
+    // 5) Stream the PDF from sample_url (treat as paid URL for now)
+    if (!ebook.sample_url) {
+      return NextResponse.json({ error: "No PDF URL configured for this ebook" }, { status: 404 });
     }
 
-    if (!materialized) {
-      return NextResponse.json({ error: "No PDF URL configured for this ebook", step: "no-source" }, { status: 404 });
-    }
-
-    if (debug) {
+    const upstream = await fetch(ebook.sample_url, { cache: "no-store" });
+    if (!upstream.ok) {
       return NextResponse.json(
-        { step: "ok", userId, ebookId, source, resolved: materialized, purchaseStatus: purchase?.status ?? null },
-        { status: 200 }
+        { error: `Upstream fetch failed`, status: upstream.status },
+        { status: 502 }
       );
-    }
-
-    // 6) Fetch and stream the PDF
-    let upstream: Response;
-    try {
-      upstream = await fetch(materialized, { cache: "no-store" });
-    } catch (err: any) {
-      return NextResponse.json({ error: err?.message ?? "Upstream fetch failed", step: "upstream-fetch" }, { status: 502 });
-    }
-
-    if (!upstream.ok || !upstream.body) {
-      return NextResponse.json({ error: "Upstream fetch failed", step: "upstream-status", upstreamStatus: upstream.status }, { status: 502 });
     }
 
     const headers = new Headers();
@@ -141,7 +99,7 @@ export async function GET(req: NextRequest) {
     return new Response(upstream.body, { status: 200, headers });
   } catch (e) {
     return NextResponse.json(
-      { error: (e as Error).message || "Server error", step: "catch" },
+      { error: (e as Error).message || "Server error" },
       { status: 500 }
     );
   }
