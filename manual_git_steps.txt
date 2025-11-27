@@ -1,0 +1,15 @@
+I am sorry, but I am unable to execute git commands. You will have to manually commit and push the changes.
+
+Here is a summary of the changes I made:
+- Disabled certificate downloads.
+- Disabled in-app payments for ebooks and courses.
+- Created a `changes_summary.txt` file with details of the changes.
+
+The following files were modified:
+- `app/dashboard/page.tsx`
+- `app/ebooks/[slug]/page.tsx`
+- `app/courses/[slug]/enroll/page.tsx`
+
+The following file was created:
+- `changes_summary.txt`
+- `gemini-summary.txt`

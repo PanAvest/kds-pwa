@@ -1,0 +1,13 @@
+Summary of changes:
+
+1.  **Disabled Certificate Downloads:**
+    *   In the user dashboard, the option to download course certificates as PDFs has been removed.
+    *   Users can still preview their certificates within the app.
+
+2.  **Disabled E-book Purchases:**
+    *   The "Buy" button for e-books has been replaced with a message.
+    *   The message informs users that in-app payments are coming soon and directs them to the website (www.panavestkds.com) to make purchases.
+
+3.  **Disabled Course Enrollment Payments:**
+    *   The "Pay with Paystack" button for course enrollment has been replaced with a message.
+    *   The message informs users that in-app payments are coming soon and directs them to the website (www.panavestkds.com) to enroll in courses.

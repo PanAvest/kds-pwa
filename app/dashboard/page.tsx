@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 import { ProgressBar } from "@/components/ProgressBar";
 import SimpleCertificate from "@/components/SimpleCertificate";
-import { isNative, savePdfToDevice } from "@/lib/nativeDownload";
+
 
 /* Types */
 type CourseRow = { id: string; slug: string; title: string; img: string | null; cpd_points: number | null };
@@ -104,7 +104,7 @@ export default function DashboardPage() {
   const [provisionalCerts, setProvisionalCerts] = useState<
     { course_id: string; course_title: string; course_slug: string; img: string | null; cpd_points: number | null; score_pct: number; passed_at: string }[]
   >([]);
-  const [downloadingCertId, setDownloadingCertId] = useState<string | null>(null);
+
 
   /* Auth gate */
   useEffect(() => {
@@ -516,172 +516,7 @@ export default function DashboardPage() {
   }, [quiz, chaptersById]);
 
   const makeKdsCertId = (u: string, courseId?: string) => `KDS-${u.slice(0, 8).toUpperCase()}${courseId ? "-" + courseId.slice(0, 6).toUpperCase() : ""}`;
-  const origin = typeof window !== "undefined" && window.location ? window.location.origin : "https://kdslearning.com";
 
-  const downloadCertPdf = async (
-    certId: string,
-    {
-      recipient,
-      course,
-      issuedAt,
-      certNumber,
-      verifyUrl,
-    }: { recipient: string; course: string; issuedAt: string | Date; certNumber: string; verifyUrl?: string },
-  ) => {
-    try {
-      if (downloadingCertId) return;
-      setDownloadingCertId(certId);
-      const { jsPDF } = await import("jspdf");
-      if (typeof window === "undefined") throw new Error("No window");
-
-      const toDataUrl = async (url: string) => {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`asset fetch failed: ${url}`);
-        const blob = await res.blob();
-        const buf = await blob.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-        return `data:${blob.type};base64,${base64}`;
-      };
-
-      const makeGradient = (w: number, h: number, stops: { offset: number; color: string }[]) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return "";
-        const g = ctx.createLinearGradient(0, 0, w, 0);
-        stops.forEach((s) => g.addColorStop(s.offset, s.color));
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, w, h);
-        return canvas.toDataURL("image/png");
-      };
-
-      const logoUrl = "/logo.png";
-      const signatureUrl = "https://icujvqmqwacpysxjfkxd.supabase.co/storage/v1/object/public/Cert%20Assets/Prof%20Signature.png";
-
-      const [logoData, sigData, qrData] = await Promise.all([
-        toDataUrl(logoUrl).catch(() => ""),
-        toDataUrl(signatureUrl).catch(() => ""),
-        verifyUrl ? toDataUrl(`https://quickchart.io/qr?text=${encodeURIComponent(verifyUrl)}&size=280&margin=1`).catch(() => "") : Promise.resolve(""),
-      ]);
-      const headerGradient = makeGradient(2000, 260, [
-        { offset: 0, color: PANABLUE },
-        { offset: 0.65, color: PANABLUE },
-        { offset: 0.75, color: "#d2a756" },
-        { offset: 1, color: "#f1d48f" },
-      ]);
-
-      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-
-      // Background
-      doc.setFillColor(255, 255, 255);
-      doc.rect(0, 0, pageWidth, pageHeight, "F");
-
-      // Border
-      doc.setDrawColor(10, 17, 86);
-      doc.setLineWidth(3);
-      doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
-
-      // Header band
-      const headerHeight = 28;
-      if (headerGradient) {
-        doc.addImage(headerGradient, "PNG", margin + 4, margin + 4, pageWidth - (margin + 4) * 2, headerHeight, undefined, "FAST");
-      } else {
-        doc.setFillColor(10, 17, 86);
-        doc.rect(margin + 4, margin + 4, pageWidth - (margin + 4) * 2, headerHeight, "F");
-      }
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text("CERTIFICATE", margin + 10, margin + 16, { align: "left" });
-      doc.text("of Appreciation", margin + 10, margin + 24, { align: "left" });
-      if (logoData) {
-        doc.addImage(logoData, "PNG", pageWidth - margin - 26, margin + 8, 22, 12, undefined, "FAST");
-      }
-
-      // Body
-      const centerX = pageWidth / 2;
-      let cursorY = margin + headerHeight + 26;
-
-      doc.setTextColor(10, 17, 86);
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.text("Proudly Presented To", centerX, cursorY, { align: "center" });
-      cursorY += 16;
-
-      doc.setFontSize(34);
-      doc.setFont("helvetica", "bold");
-      doc.text(recipient || "Your Name", centerX, cursorY, { align: "center" });
-      cursorY += 16;
-
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(55, 65, 81);
-      doc.text("for successfully completing", centerX, cursorY, { align: "center" });
-      cursorY += 14;
-
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(19);
-      doc.setTextColor(31, 41, 55);
-      doc.text(course, centerX, cursorY, { align: "center" });
-      cursorY += 20;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      doc.setTextColor(55, 65, 81);
-      doc.text(`Certificate No: ${certNumber}`, centerX, cursorY, { align: "center" });
-      cursorY += 10;
-      doc.text(`Issued: ${new Date(issuedAt).toLocaleDateString()}`, centerX, cursorY, { align: "center" });
-
-      // Footer: signature left, QR right
-      const footerY = pageHeight - margin - 32;
-      const leftX = margin + 16;
-      const rightX = pageWidth - margin - 22;
-
-      if (sigData) {
-        doc.addImage(sigData, "PNG", leftX, footerY - 16, 60, 18, undefined, "FAST");
-      }
-      doc.setDrawColor(10, 17, 86);
-      doc.setLineWidth(0.6);
-      doc.line(leftX, footerY + 4, leftX + 70, footerY + 4);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(10, 17, 86);
-      doc.text("Authorized Signatory", leftX + 35, footerY + 12, { align: "center" });
-
-      if (qrData) {
-        const qrSize = 38;
-        const qrTop = pageHeight - margin - qrSize - 10;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(55, 65, 81);
-        doc.text("Scan to verify", rightX, qrTop - 6, { align: "center" });
-        doc.addImage(qrData, "PNG", rightX - qrSize / 2, qrTop, qrSize, qrSize, undefined, "FAST");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(10, 17, 86);
-        doc.text(certNumber, rightX, qrTop + qrSize + 8, { align: "center" });
-      }
-
-      const filename = certNumber ? `PanAvest-Certificate-${certNumber}.pdf` : "PanAvest-Certificate.pdf";
-      if (isNative()) {
-        const blob = doc.output("blob");
-        await savePdfToDevice(filename, blob);
-      } else {
-        doc.save(filename);
-      }
-    } catch (err) {
-      console.error("Certificate PDF generation failed", err);
-      if (typeof window !== "undefined") {
-        window.alert("We could not download the certificate. Please try again.");
-      }
-    } finally {
-      setDownloadingCertId(null);
-    }
-  };
 
   // Early show
   if (!sessionReady) {
@@ -883,23 +718,6 @@ export default function DashboardPage() {
                       </details>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            downloadCertPdf(c.id, {
-                              recipient: fullName || "Your Name",
-                              course: courseTitle,
-                              issuedAt: c.issued_at,
-                              certNumber: kdsCertId,
-                              verifyUrl,
-                            })
-                          }
-                          disabled={downloadingCertId === c.id}
-                          className="rounded-lg px-3 py-1.5 text-xs text-white disabled:opacity-60"
-                          style={{ backgroundColor: PANABLUE }}
-                        >
-                          {downloadingCertId === c.id ? "Preparing…" : "Download certificate"}
-                        </button>
                         <span className="text-[11px] text-muted">Final score: {c.score_pct != null ? `${c.score_pct}%` : "—"}</span>
                       </div>
                     </div>

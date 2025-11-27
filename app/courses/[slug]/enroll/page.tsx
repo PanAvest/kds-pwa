@@ -137,44 +137,7 @@ export default function EnrollPage() {
     return () => window.removeEventListener(PAYSTACK_NATIVE_EVENT, listener as EventListener);
   }, [handleNativePaystack]);
 
-  async function payNow() {
-    if (!userId || !email || !course) return;
-    try {
-      setNotice("Redirecting to Paystack…");
-      const payload: Record<string, unknown> = {
-        email,
-        amountMinor: course.price_cents, // already minor units
-        meta: { kind: "course", user_id: userId, course_id: course.id, slug: course.slug },
-      };
-      if (isNative()) {
-        payload.callbackUrl = "kdslearning://paystack/return";
-      }
-      const res = await fetch("/api/payments/paystack/init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.authorization_url) {
-        setNotice(data?.error || "Failed to initialize payment.");
-        return;
-      }
-      if (isNative() && data?.reference) {
-        setNotice("Waiting for Paystack confirmation…");
-        await Browser.open({ url: data.authorization_url as string });
-        setNotice("Verifying payment…");
-        const pollResult = await pollPaystackReference(data.reference);
-        if (!pollResult.ok) {
-          setNotice(pollResult.error || "We are still verifying your payment.");
-        }
-        return;
-      }
-      // Move in the same window so Safari/standalone apps don’t spawn a new tab
-      window.location.replace(data.authorization_url as string);
-    } catch {
-      setNotice("Something went wrong starting the payment. Please try again.");
-    }
-  }
+
 
   if (!course) {
     return (
@@ -195,13 +158,20 @@ export default function EnrollPage() {
         <div className="text-lg font-semibold">
           Total: {course.currency} {(course.price_cents / 100).toFixed(2)}
         </div>
-        <button
-          type="button"
-          onClick={payNow}
-          className="mt-4 rounded-lg bg-[color:#b65437] text-white px-5 py-2 font-semibold hover:opacity-90"
-        >
-          Pay with Paystack
-        </button>
+        <div>
+          <p className="text-sm text-muted">
+            In-app payments are coming soon. For now, payments can only be made on our website.
+          </p>
+          <a
+            href="https://www.panavestkds.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block rounded-lg px-4 py-2 text-white"
+            style={{ backgroundColor: "#b65437" }}
+          >
+            Enroll on website
+          </a>
+        </div>
         {!!notice && <div className="mt-3 text-sm">{notice}</div>}
       </div>
     </div>

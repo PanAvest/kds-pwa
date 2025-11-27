@@ -67,7 +67,7 @@ export default function EbookDetailPage() {
   const [own, setOwn] = useState<OwnershipState>({ kind: "loading" });
   const [userId, setUserId] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [buying, setBuying] = useState(false);
+
   const [verifying, setVerifying] = useState<string | null>(null);
   const handledNativeReferences = useRef<Set<string>>(new Set());
 
@@ -247,56 +247,7 @@ export default function EbookDetailPage() {
   }, [ebook]);
 
   /** Start Paystack */
-  async function handleBuy() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push(`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`); return; }
-    if (!ebook || !email) return;
 
-    setBuying(true);
-    try {
-      const numeric = typeof ebook.price_cents === "number" ? ebook.price_cents : Number(ebook.price_cents ?? 0);
-      const amountMinor = Math.round(Number.isFinite(numeric) ? numeric : 0);
-      const payload: Record<string, unknown> = {
-        email,
-        amountMinor,
-        meta: { kind: "ebook", user_id: user.id, ebook_id: ebook.id, slug: ebook.slug },
-      };
-      if (isNative()) {
-        payload.callbackUrl = "kdslearning://paystack/return";
-      }
-
-      const res = await fetch("/api/payments/paystack/init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.authorization_url) throw new Error(data?.error || "Failed to initialize payment.");
-
-      if (isNative() && data?.reference) {
-        setVerifying(data.reference);
-        try {
-          await Browser.open({ url: data.authorization_url as string });
-          const pollResult = await pollPaystackReference(data.reference);
-          if (!pollResult.ok) {
-            setErr(pollResult.error || "We are still verifying your payment.");
-          }
-        } catch (error) {
-          setErr(((error as Error)?.message as string) || "Could not open Paystack.");
-        } finally {
-          setVerifying(null);
-        }
-        return;
-      }
-
-      // Use replace to avoid opening a new tab and return back into the app domain
-      window.location.replace(data.authorization_url as string);
-    } catch (e) {
-      setErr((e as Error).message || "Payment init failed");
-    } finally {
-      setBuying(false);
-    }
-  }
 
   /** Load PDF bytes via secure route */
   const ensurePdfDoc = useCallback(async (): Promise<PdfDoc | null> => {
@@ -505,14 +456,20 @@ export default function EbookDetailPage() {
 
                 {own.kind === "not_owner" && (
                   <>
-                    <button
-                      onClick={handleBuy}
-                      disabled={buying}
-                      className="rounded-lg text-white px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-60 w-full sm:w-auto"
-                      style={{ backgroundColor: "var(--color-accent-red)" }}
-                    >
-                      {buying ? "Redirecting…" : `Buy • ${price}`}
-                    </button>
+                    <div>
+                      <p className="text-sm text-muted">
+                        In-app payments are coming soon. For now, payments can only be made on our website.
+                      </p>
+                      <a
+                        href="https://www.panavestkds.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-block rounded-lg px-4 py-2 text-white"
+                        style={{ backgroundColor: "var(--color-accent-red)" }}
+                      >
+                        Buy on website
+                      </a>
+                    </div>
                     <Link
                       href={dashboardHref}
                       className="inline-flex items-center justify-center rounded-lg px-5 py-3 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50 w-full sm:w-auto"

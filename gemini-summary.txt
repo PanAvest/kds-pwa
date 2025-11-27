@@ -1,0 +1,1 @@
+I have made the requested changes. I have disabled certificate downloads and payments for both books and courses. A summary of all changes can be found in the `changes_summary.txt` file in the root of the project. I was unable to commit these changes to git.
