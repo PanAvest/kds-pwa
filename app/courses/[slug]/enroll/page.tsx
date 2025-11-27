@@ -2,8 +2,15 @@
 "use client";
 
 import React from "react";
+import { Browser } from "@capacitor/browser";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { isNative } from "@/lib/nativeDownload";
+import {
+  pollPaystackReference,
+  PAYSTACK_NATIVE_EVENT,
+  PaystackVerifyResponse,
+} from "@/lib/paystackNative";
 
 type CourseRow = {
   id: string;
@@ -33,6 +40,22 @@ export default function EnrollPage() {
   const [email, setEmail] = React.useState<string>("");
   const [course, setCourse] = React.useState<Course | null>(null);
   const [notice, setNotice] = React.useState<string>("");
+  const handledNativeReferences = React.useRef<Set<string>>(new Set());
+  const handleNativePaystack = React.useCallback(
+    (payload: PaystackVerifyResponse) => {
+      if (!payload?.ok) return;
+      const reference = payload.reference;
+      if (!reference || handledNativeReferences.current.has(reference)) {
+        return;
+      }
+      handledNativeReferences.current.add(reference);
+      if (payload.kind === "course" && payload.slug === slug) {
+        setNotice("Payment verified. Redirecting…");
+        router.replace(`/courses/${slug}/dashboard`);
+      }
+    },
+    [router, slug]
+  );
 
   // Require auth
   React.useEffect(() => {
@@ -103,22 +126,47 @@ export default function EnrollPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const listener = (event: Event) => {
+      const payload = (event as CustomEvent<PaystackVerifyResponse>)?.detail;
+      if (!payload) return;
+      handleNativePaystack(payload);
+    };
+    window.addEventListener(PAYSTACK_NATIVE_EVENT, listener as EventListener);
+    return () => window.removeEventListener(PAYSTACK_NATIVE_EVENT, listener as EventListener);
+  }, [handleNativePaystack]);
+
   async function payNow() {
     if (!userId || !email || !course) return;
     try {
       setNotice("Redirecting to Paystack…");
+      const payload: Record<string, unknown> = {
+        email,
+        amountMinor: course.price_cents, // already minor units
+        meta: { kind: "course", user_id: userId, course_id: course.id, slug: course.slug },
+      };
+      if (isNative()) {
+        payload.callbackUrl = "kdslearning://paystack/return";
+      }
       const res = await fetch("/api/payments/paystack/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          amountMinor: course.price_cents, // already minor units
-          meta: { kind: "course", user_id: userId, course_id: course.id, slug: course.slug },
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok || !data?.authorization_url) {
         setNotice(data?.error || "Failed to initialize payment.");
+        return;
+      }
+      if (isNative() && data?.reference) {
+        setNotice("Waiting for Paystack confirmation…");
+        await Browser.open({ url: data.authorization_url as string });
+        setNotice("Verifying payment…");
+        const pollResult = await pollPaystackReference(data.reference);
+        if (!pollResult.ok) {
+          setNotice(pollResult.error || "We are still verifying your payment.");
+        }
         return;
       }
       // Move in the same window so Safari/standalone apps don’t spawn a new tab

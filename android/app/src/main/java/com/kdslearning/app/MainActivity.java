@@ -3,6 +3,7 @@ package com.kdslearning.app;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
+import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -376,6 +377,12 @@ public class MainActivity extends BridgeActivity {
         if (loadingOverlay == null || loadingSpinner == null) return;
         loadingSpinner.setVisibility(View.GONE);
         loadingOverlay.setVisibility(View.GONE);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        getBridge().onNewIntent(intent);
     }
 
     private int dp(int value) {

@@ -5,7 +5,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import * as pdfjs from "pdfjs-dist";
+import { Browser } from "@capacitor/browser";
 import { supabase } from "@/lib/supabaseClient";
+import { isNative } from "@/lib/nativeDownload";
+import {
+  pollPaystackReference,
+  PAYSTACK_NATIVE_EVENT,
+  PaystackVerifyResponse,
+} from "@/lib/paystackNative";
 
 /** ── Minimal PDF.js typings ──────────────────────────────────────── */
 type PdfHttpHeaders = Record<string, string>;
@@ -62,6 +69,7 @@ export default function EbookDetailPage() {
   const [email, setEmail] = useState<string>("");
   const [buying, setBuying] = useState(false);
   const [verifying, setVerifying] = useState<string | null>(null);
+  const handledNativeReferences = useRef<Set<string>>(new Set());
 
   // Reader state
   const [pdfReady, setPdfReady] = useState(false);
@@ -81,6 +89,19 @@ export default function EbookDetailPage() {
   const pagesRef = useRef<HTMLDivElement | null>(null);
   const pdfDocRef = useRef<PdfDoc | null>(null);
   const lastContainerWidthRef = useRef<number>(0);
+  const handleNativePaystack = useCallback(
+    (payload: PaystackVerifyResponse) => {
+      if (!payload?.ok || payload.kind !== "ebook" || payload.slug !== slug) return;
+      const reference = payload.reference;
+      if (!reference || handledNativeReferences.current.has(reference)) return;
+      handledNativeReferences.current.add(reference);
+      setVerifying(null);
+      setOwn({ kind: "owner" });
+      setErr(null);
+      router.replace(`/ebooks/${slug}`);
+    },
+    [router, slug]
+  );
 
   const dashboardHref = "/dashboard";
 
@@ -206,6 +227,17 @@ export default function EbookDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, ebook?.id, userId, slug]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const listener = (event: Event) => {
+      const payload = (event as CustomEvent<PaystackVerifyResponse>)?.detail;
+      if (!payload) return;
+      handleNativePaystack(payload);
+    };
+    window.addEventListener(PAYSTACK_NATIVE_EVENT, listener as EventListener);
+    return () => window.removeEventListener(PAYSTACK_NATIVE_EVENT, listener as EventListener);
+  }, [handleNativePaystack]);
+
   /** Price label (safe number parsing) */
   const price = useMemo(() => {
     if (!ebook) return "";
@@ -224,15 +256,39 @@ export default function EbookDetailPage() {
     try {
       const numeric = typeof ebook.price_cents === "number" ? ebook.price_cents : Number(ebook.price_cents ?? 0);
       const amountMinor = Math.round(Number.isFinite(numeric) ? numeric : 0);
+      const payload: Record<string, unknown> = {
+        email,
+        amountMinor,
+        meta: { kind: "ebook", user_id: user.id, ebook_id: ebook.id, slug: ebook.slug },
+      };
+      if (isNative()) {
+        payload.callbackUrl = "kdslearning://paystack/return";
+      }
+
       const res = await fetch("/api/payments/paystack/init", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email, amountMinor,
-          meta: { kind: "ebook", user_id: user.id, ebook_id: ebook.id, slug: ebook.slug },
-        }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok || !data?.authorization_url) throw new Error(data?.error || "Failed to initialize payment.");
+
+      if (isNative() && data?.reference) {
+        setVerifying(data.reference);
+        try {
+          await Browser.open({ url: data.authorization_url as string });
+          const pollResult = await pollPaystackReference(data.reference);
+          if (!pollResult.ok) {
+            setErr(pollResult.error || "We are still verifying your payment.");
+          }
+        } catch (error) {
+          setErr(((error as Error)?.message as string) || "Could not open Paystack.");
+        } finally {
+          setVerifying(null);
+        }
+        return;
+      }
+
       // Use replace to avoid opening a new tab and return back into the app domain
       window.location.replace(data.authorization_url as string);
     } catch (e) {

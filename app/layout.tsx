@@ -4,6 +4,7 @@ import type { Metadata } from "next"
 import { ToastHost } from "@/components/ui/toast"
 import LoadingOverlay from "@/components/LoadingOverlay"
 import AssetErrorLogger from "@/components/AssetErrorLogger"
+import NativePaystackListener from "@/components/NativePaystackListener"
 
 export const metadata: Metadata = {
   title: "KDS Learning",
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AssetErrorLogger />
         {/* GLOBAL LOADING FADE, like MainViewController.swift */}
         <LoadingOverlay />
+        <NativePaystackListener />
 
         {/* Main content; mobile app will be inside native header + bottom bar */}
         <main className="min-h-[100dvh] pb-4">

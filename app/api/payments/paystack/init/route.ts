@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const { email, amountMinor, meta } = await req.json();
+    const { email, amountMinor, meta, callbackUrl } = await req.json();
 
     // Basic checks (support course + ebook)
     const isCourse = meta?.kind === "course" && meta?.course_id;
@@ -21,9 +21,11 @@ export async function POST(req: Request) {
       process.env.PUBLIC_WEB_BASE_URL ||
       process.env.NEXT_PUBLIC_SITE_URL ||
       "http://localhost:3000";
-    const callback_url = isCourse
-      ? `${base}/courses/${meta.slug}/enroll?verify=1`
-      : `${base}/ebooks/${meta.slug}?verify=1`;
+    const callback_url =
+      callbackUrl ??
+      (isCourse
+        ? `${base}/courses/${meta.slug}/enroll?verify=1`
+        : `${base}/ebooks/${meta.slug}?verify=1`);
 
     const res = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",

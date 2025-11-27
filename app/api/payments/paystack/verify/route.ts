@@ -48,7 +48,12 @@ export async function GET(req: Request) {
         );
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      reference,
+      kind: meta.kind,
+      slug: meta.slug,
+    });
   } catch {
     return NextResponse.json({ ok: false }, { status: 500 });
   }
