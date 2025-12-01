@@ -1,0 +1,6 @@
+node_modules
+.next
+android/app/build
+public/interactive
+public/sw.js
+public/workbox-*.js

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import * as pdfjs from "pdfjs-dist";
+import { isIOSApp } from "@/lib/platform";
 import { supabase } from "@/lib/supabaseClient";
 
 /** ── Minimal PDF.js typings ──────────────────────────────────────── */
@@ -53,6 +54,7 @@ export default function EbookDetailPage() {
   const search = useSearchParams();
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
+  const isIOS = useMemo(() => isIOSApp(), []);
 
   const [ebook, setEbook] = useState<Ebook | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -213,9 +215,15 @@ export default function EbookDetailPage() {
     if (!Number.isFinite(numeric)) return "GH₵ 0.00";
     return `GH₵ ${(numeric / 100).toFixed(2)}`;
   }, [ebook]);
+  const iosPurchaseNote =
+    "On iOS, this app lets you sign in and access e-books you have already obtained through KDS Learning on other platforms. Purchases are done outside the iOS app.";
 
   /** Start Paystack */
   async function handleBuy() {
+    if (isIOS) {
+      setErr(iosPurchaseNote);
+      return;
+    }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push(`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`); return; }
     if (!ebook || !email) return;
@@ -425,6 +433,11 @@ export default function EbookDetailPage() {
               <h1 className="text-2xl font-bold">{ebook.title}</h1>
               <div className="mt-2 text-sm text-muted">Price</div>
               <div className="text-xl font-semibold">{price}</div>
+              {isIOS && (
+                <div className="mt-2 rounded-md bg-[color:var(--color-light)]/60 text-xs text-muted px-3 py-2">
+                  {iosPurchaseNote}
+                </div>
+              )}
 
               <div className="mt-4 grid gap-3">
                 {own.kind === "loading" && (<div className="text-sm text-muted">Checking access…</div>)}
@@ -441,7 +454,7 @@ export default function EbookDetailPage() {
                       href={`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`}
                       className="inline-flex items-center justify-center rounded-lg bg-brand text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
                     >
-                      Sign in to buy
+                      {isIOS ? "Sign in" : "Sign in to buy"}
                     </Link>
                     <Link
                       href={dashboardHref}
@@ -449,26 +462,39 @@ export default function EbookDetailPage() {
                     >
                       Go to Dashboard
                     </Link>
+                    {isIOS && (
+                      <div className="text-xs text-muted">
+                        If you already obtained access elsewhere, sign in with the same KDS Learning account.
+                      </div>
+                    )}
                   </>
                 )}
 
                 {own.kind === "not_owner" && (
-                  <>
-                    <button
-                      onClick={handleBuy}
-                      disabled={buying}
-                      className="rounded-lg text-white px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-60 w-full sm:w-auto"
-                      style={{ backgroundColor: "var(--color-accent-red)" }}
-                    >
-                      {buying ? "Redirecting…" : `Buy • ${price}`}
-                    </button>
-                    <Link
-                      href={dashboardHref}
-                      className="inline-flex items-center justify-center rounded-lg px-5 py-3 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50 w-full sm:w-auto"
-                    >
-                      Go to Dashboard
-                    </Link>
-                  </>
+                  isIOS ? (
+                    <>
+                      <div className="rounded-md bg-[color:var(--color-light)]/60 px-4 py-3 text-sm text-muted">
+                        {iosPurchaseNote}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleBuy}
+                        disabled={buying}
+                        className="rounded-lg text-white px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-60 w-full sm:w-auto"
+                        style={{ backgroundColor: "var(--color-accent-red)" }}
+                      >
+                        {buying ? "Redirecting…" : `Buy • ${price}`}
+                      </button>
+                      <Link
+                        href={dashboardHref}
+                        className="inline-flex items-center justify-center rounded-lg px-5 py-3 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50 w-full sm:w-auto"
+                      >
+                        Go to Dashboard
+                      </Link>
+                    </>
+                  )
                 )}
 
                 {own.kind === "owner" && (
@@ -491,7 +517,11 @@ export default function EbookDetailPage() {
               </div>
 
               {own.kind !== "owner" && (
-                <p className="mt-3 text-xs text-muted">Sign in and purchase to unlock reading.</p>
+                <p className="mt-3 text-xs text-muted">
+                  {isIOS
+                    ? "If you already have access, sign in with the same KDS Learning account to read."
+                    : "Sign in and purchase to unlock reading."}
+                </p>
               )}
             </div>
           </div>
@@ -505,9 +535,11 @@ export default function EbookDetailPage() {
                 <div className="text-center px-6">
                   <div className="text-lg font-semibold">Access locked</div>
                   <p className="text-sm text-muted mt-1">
-                    {own.kind === "signed_out"
-                      ? "Sign in and purchase to read the full e-book."
-                      : "Purchase to read the full e-book."}
+                    {isIOS
+                      ? "On iOS, sign in with your KDS Learning account to access e-books you already obtained."
+                      : own.kind === "signed_out"
+                        ? "Sign in and purchase to read the full e-book."
+                        : "Purchase to read the full e-book."}
                   </p>
                 </div>
               </div>

@@ -3,6 +3,7 @@
 
 import React from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { isIOSApp } from "@/lib/platform";
 import { supabase } from "@/lib/supabaseClient";
 
 type CourseRow = {
@@ -33,6 +34,7 @@ export default function EnrollPage() {
   const [email, setEmail] = React.useState<string>("");
   const [course, setCourse] = React.useState<Course | null>(null);
   const [notice, setNotice] = React.useState<string>("");
+  const isIOS = React.useMemo(() => isIOSApp(), []);
 
   // Require auth
   React.useEffect(() => {
@@ -104,6 +106,10 @@ export default function EnrollPage() {
   }, []);
 
   async function payNow() {
+    if (isIOS) {
+      setNotice("On iOS, this app is for accessing existing courses. Purchases happen outside the iOS app.");
+      return;
+    }
     if (!userId || !email || !course) return;
     try {
       setNotice("Redirecting to Paystack…");
@@ -147,13 +153,20 @@ export default function EnrollPage() {
         <div className="text-lg font-semibold">
           Total: {course.currency} {(course.price_cents / 100).toFixed(2)}
         </div>
-        <button
-          type="button"
-          onClick={payNow}
-          className="mt-4 rounded-lg bg-[color:#b65437] text-white px-5 py-2 font-semibold hover:opacity-90"
-        >
-          Pay with Paystack
-        </button>
+        {isIOS ? (
+          <div className="mt-3 space-y-1 text-sm text-muted">
+            <p>On iOS, this app lets you sign in and access courses you have already obtained through KDS Learning on other platforms.</p>
+            <p>If you already have access, sign in with the same KDS Learning account to continue.</p>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={payNow}
+            className="mt-4 rounded-lg bg-[color:#b65437] text-white px-5 py-2 font-semibold hover:opacity-90"
+          >
+            Pay with Paystack
+          </button>
+        )}
         {!!notice && <div className="mt-3 text-sm">{notice}</div>}
       </div>
     </div>

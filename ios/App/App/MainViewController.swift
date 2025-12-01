@@ -23,6 +23,13 @@ class MainViewController: CAPBridgeViewController {
 
     // Track if we've attached the webview observer
     private var observingWebViewProgress = false
+    private var splashViewController: SplashViewController?
+    private var hasHiddenSplash = false
+    private var webReadyEventReceived = false
+    private weak var originalNavigationDelegate: WKNavigationDelegate?
+    private weak var originalUIDelegate: WKUIDelegate?
+    private var hasSentNativeReadyEvent = false
+    private let webReadyMessageHandlerName = "kdsWebReady"
 
     // 0 = Home, 1 = Programs, 2 = E-Books, 3 = Dashboard
     private var currentTab: Int = 0
@@ -48,6 +55,9 @@ class MainViewController: CAPBridgeViewController {
         setupStatusBarBackground()
         setupBottomBar()
         setupLoadingOverlay()
+        showSplashScreen()
+        installWebReadyMessageHandler()
+        attachNavigationDelegate()
 
         updateTabSelection()
         applyInsetsToWebView()
@@ -69,6 +79,9 @@ class MainViewController: CAPBridgeViewController {
         // Clean up observer
         if observingWebViewProgress, let webView = bridge?.webView as? WKWebView {
             webView.removeObserver(self, forKeyPath: "estimatedProgress")
+        }
+        if let webView = bridge?.webView as? WKWebView {
+            webView.configuration.userContentController.removeScriptMessageHandler(forName: webReadyMessageHandlerName)
         }
     }
 
@@ -279,6 +292,74 @@ class MainViewController: CAPBridgeViewController {
         webView.scrollView.scrollIndicatorInsets = inset
     }
 
+    // MARK: - Splash handling
+
+    private func showSplashScreen() {
+        guard splashViewController == nil else { return }
+
+        let splashVC = SplashViewController()
+        splashVC.modalPresentationStyle = .fullScreen
+        splashVC.modalTransitionStyle = .crossDissolve
+        splashViewController = splashVC
+
+        DispatchQueue.main.async { [weak self] in
+            self?.present(splashVC, animated: false, completion: nil)
+        }
+    }
+
+    private func hideSplashScreenIfReady() {
+        guard !hasHiddenSplash,
+              webReadyEventReceived,
+              let splashVC = splashViewController else { return }
+        hasHiddenSplash = true
+        splashVC.fadeOutAndDismiss()
+        splashViewController = nil
+    }
+
+    // MARK: - Web ready bridge
+
+    private func installWebReadyMessageHandler() {
+        guard let webView = bridge?.webView as? WKWebView else { return }
+
+        let controller = webView.configuration.userContentController
+        controller.removeScriptMessageHandler(forName: webReadyMessageHandlerName)
+        controller.add(self, name: webReadyMessageHandlerName)
+
+        let listenerScript = """
+        (function() {
+          if (window.__kdsReadyBridgeInstalled) { return; }
+          window.__kdsReadyBridgeInstalled = true;
+          function notifyNative() {
+            if (window.__KDS_WEB_READY !== true) { return; }
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.\(webReadyMessageHandlerName)) {
+              window.webkit.messageHandlers.\(webReadyMessageHandlerName).postMessage('ready');
+            }
+          }
+          window.addEventListener('kdsWebReady', function() { notifyNative(); });
+          if (window.__KDS_WEB_READY === true) { notifyNative(); }
+        })();
+        """
+
+        let userScript = WKUserScript(source: listenerScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        controller.addUserScript(userScript)
+        webView.evaluateJavaScript(listenerScript, completionHandler: nil)
+    }
+
+    private func attachNavigationDelegate() {
+        guard let webView = bridge?.webView as? WKWebView else { return }
+        originalNavigationDelegate = webView.navigationDelegate
+        originalUIDelegate = webView.uiDelegate
+        webView.navigationDelegate = self
+        webView.uiDelegate = self
+        webView.allowsLinkPreview = false
+    }
+
+    private func sendNativeReadyEventToWebView() {
+        guard !hasSentNativeReadyEvent else { return }
+        hasSentNativeReadyEvent = true
+        bridge?.webView?.evaluateJavaScript("window.dispatchEvent(new Event('kdsWebReady'))", completionHandler: nil)
+    }
+
     // MARK: - Observe WKWebView progress to show/hide loader for ALL navigations
 
     private func setupWebViewProgressObserver() {
@@ -358,5 +439,81 @@ class MainViewController: CAPBridgeViewController {
         """
 
         webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+}
+
+// MARK: - WKNavigationDelegate & WKScriptMessageHandler
+
+extension MainViewController: WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate {
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        originalNavigationDelegate?.webView?(webView, didStartProvisionalNavigation: navigation)
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        originalNavigationDelegate?.webView?(webView, didCommit: navigation)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        originalNavigationDelegate?.webView?(webView, didFinish: navigation)
+        sendNativeReadyEventToWebView()
+        hideSplashScreenIfReady()
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        originalNavigationDelegate?.webView?(webView, didFail: navigation, withError: error)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        originalNavigationDelegate?.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        originalNavigationDelegate?.webViewWebContentProcessDidTerminate?(webView)
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if let delegate = originalNavigationDelegate,
+           delegate.responds(to: Selector(("webView:decidePolicyForNavigationAction:decisionHandler:"))) {
+            delegate.webView?(webView, decidePolicyFor: navigationAction, decisionHandler: decisionHandler)
+        } else {
+            decisionHandler(.allow)
+        }
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if let delegate = originalNavigationDelegate,
+           delegate.responds(to: Selector(("webView:decidePolicyForNavigationResponse:decisionHandler:"))) {
+            delegate.webView?(webView, decidePolicyFor: navigationResponse, decisionHandler: decisionHandler)
+        } else {
+            decisionHandler(.allow)
+        }
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == webReadyMessageHandlerName {
+            webReadyEventReceived = true
+            hideSplashScreenIfReady()
+        }
+    }
+
+    // MARK: - Context menu / link preview suppression
+
+    func webView(_ webView: WKWebView, shouldPreviewElement elementInfo: WKPreviewElementInfo) -> Bool {
+        return false
+    }
+
+    func webView(_ webView: WKWebView, previewingViewControllerForElement elementInfo: WKPreviewElementInfo, defaultActions previewActions: [WKPreviewActionItem]) -> UIViewController? {
+        return nil
+    }
+
+    @available(iOS 13.0, *)
+    func webView(_ webView: WKWebView, contextMenuConfigurationForElement elementInfo: WKContextMenuElementInfo, completionHandler: @escaping (UIContextMenuConfiguration?) -> Void) {
+        completionHandler(nil)
+    }
+
+    @available(iOS 13.0, *)
+    func webView(_ webView: WKWebView, contextMenuForElement elementInfo: WKContextMenuElementInfo) -> UIContextMenuConfiguration? {
+        return nil
     }
 }

@@ -3,6 +3,7 @@ import "./globals.css"
 import type { Metadata } from "next"
 import { ToastHost } from "@/components/ui/toast"
 import LoadingOverlay from "@/components/LoadingOverlay"
+import ReadySignal from "./ReadySignal"
 
 export const metadata: Metadata = {
   title: "KDS Learning",
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       {/* no-copy keeps whole app non-selectable / non-copyable (set in globals.css) */}
       <body className="bg-[var(--color-bg)] no-copy">
+        <ReadySignal />
         {/* GLOBAL LOADING FADE, like MainViewController.swift */}
         <LoadingOverlay />
 

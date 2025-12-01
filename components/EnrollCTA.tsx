@@ -2,7 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { isIOSApp } from "@/lib/platform";
 import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
@@ -19,6 +20,9 @@ type EnrollState =
 
 export default function EnrollCTA({ courseId, slug, className }: Props) {
   const [state, setState] = useState<EnrollState>({ kind: "loading" });
+  const isIOS = useMemo(() => isIOSApp(), []);
+  const iosAccessCopy =
+    "On iOS, this app lets you sign in and access courses you have already obtained through KDS Learning elsewhere. Purchases are done outside the iOS app.";
 
   useEffect(() => {
     let alive = true;
@@ -50,6 +54,19 @@ export default function EnrollCTA({ courseId, slug, className }: Props) {
   }
 
   if (state.kind === "signed_out") {
+    if (isIOS) {
+      return (
+        <div className={`space-y-2 ${className || ""}`}>
+          <div className="text-sm text-muted">{iosAccessCopy}</div>
+          <Link
+            href={`/auth/sign-in?redirect=${encodeURIComponent(`/courses/${slug}`)}`}
+            className="inline-flex items-center justify-center rounded-lg bg-[color:var(--color-accent-red)] text-white px-5 py-2.5 font-semibold hover:opacity-90"
+          >
+            Sign in to access
+          </Link>
+        </div>
+      );
+    }
     return (
       <Link
         href={`/auth/sign-in?redirect=${encodeURIComponent(`/courses/${slug}`)}`}
@@ -68,6 +85,17 @@ export default function EnrollCTA({ courseId, slug, className }: Props) {
       >
         Go to Dashboard
       </Link>
+    );
+  }
+
+  if (isIOS) {
+    return (
+      <div className={`space-y-2 ${className || ""}`}>
+        <div className="text-sm text-muted">{iosAccessCopy}</div>
+        <div className="text-xs text-muted">
+          If you already have access, sign in with the same KDS Learning account to continue.
+        </div>
+      </div>
     );
   }
 

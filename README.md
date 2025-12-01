@@ -3,6 +3,8 @@
 Production-ready scaffold with PWA (next-pwa), push notifications (FCM), Supabase auth/DB, and Paystack stubs.
 See the chat message for the full quickstart and deployment steps.
 
+Note: On iOS, the Capacitor shell is an access-only companion; purchases happen on web/Android or other platforms outside the iOS app.
+
 KDS Learning – Privacy Policy (English – U.K.)
 Effective Date: 27 November 2025
 KDS Learning (“we”, “our”, “us”) is operated by PanAvest International & Partners.

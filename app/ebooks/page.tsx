@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { isIOSApp } from "@/lib/platform";
 
 type Ebook = {
   id: string;
@@ -19,6 +20,7 @@ export default function Ebooks() {
   const router = useRouter();
   const sp = useSearchParams();
   const qParam = sp.get("q") ?? "";
+  const isIOS = useMemo(() => isIOSApp(), []);
 
   const [q, setQ] = useState(qParam);
   const [items, setItems] = useState<Ebook[] | null>(null);
@@ -67,7 +69,9 @@ export default function Ebooks() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">E-Books</h1>
           <p className="mt-1 text-muted max-w-2xl text-sm sm:text-base">
-            Buy to unlock reading. Your purchases appear in the Dashboard.
+            {isIOS
+              ? "On iOS, this app lets you sign in and access e-books you have already obtained through KDS Learning elsewhere."
+              : "Buy to unlock reading. Your purchases appear in the Dashboard."}
           </p>
         </div>
 
