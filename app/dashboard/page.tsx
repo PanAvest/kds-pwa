@@ -325,35 +325,34 @@ export default function DashboardPage() {
 
         let enrolledTmp: EnrolledCourse[] = [];
         const metaTmp: Record<string, CourseMeta> = {};
-        const needCompute: string[] = [];
+        const allCourseIds: string[] = [];
 
         if (enrData) {
           const rows = enrData as unknown as EnrollmentRow[];
           for (const r of rows) {
             const c = pickCourse(r.courses) || { id: "", slug: "", title: "", img: null, cpd_points: null };
-            const pct = typeof r.progress_pct === "number" ? r.progress_pct : 0;
-            if (r.progress_pct == null) needCompute.push(r.course_id);
             metaTmp[r.course_id] = { title: c.title, slug: c.slug, cpd_points: c.cpd_points ?? null, img: c.img ?? null };
             enrolledTmp.push({
               course_id: r.course_id,
-              progress_pct: pct,
+              progress_pct: 0, // will be recomputed from slides for all courses
               title: c.title,
               slug: c.slug,
               img: c.img ?? null,
               cpd_points: c.cpd_points ?? null,
             });
+            allCourseIds.push(r.course_id);
           }
         }
 
-        // Compute progress if needed
-        if (needCompute.length > 0) {
-          const { data: chRows } = await supabase
-            .from("course_chapters")
-            .select("id,course_id")
-            .in("course_id", Array.from(new Set(needCompute)));
+        // Compute progress from slides for all enrolled courses (ignore legacy enrollments.progress_pct)
+        if (allCourseIds.length > 0) {
+          const uniqueCourseIds = Array.from(new Set(allCourseIds));
+          const { data: chRows } = await supabase.from("course_chapters").select("id,course_id").in("course_id", uniqueCourseIds);
           const chaptersByCourse: Record<string, string[]> = {};
+          const courseByChapter: Record<string, string> = {};
           (chRows ?? []).forEach((r: { id: string; course_id: string }) => {
             (chaptersByCourse[r.course_id] ||= []).push(r.id);
+            courseByChapter[r.id] = r.course_id;
           });
 
           const allChapterIds = Object.values(chaptersByCourse).flat();
@@ -361,7 +360,7 @@ export default function DashboardPage() {
           if (allChapterIds.length > 0) {
             const { data: slRows } = await supabase.from("course_slides").select("id,chapter_id").in("chapter_id", allChapterIds);
             (slRows ?? []).forEach((s: { id: string; chapter_id: string }) => {
-              const cid = Object.keys(chaptersByCourse).find((k) => (chaptersByCourse[k] || []).includes(s.chapter_id));
+              const cid = courseByChapter[s.chapter_id];
               if (cid) totalSlidesByCourse[cid] = (totalSlidesByCourse[cid] ?? 0) + 1;
             });
           }
@@ -370,7 +369,7 @@ export default function DashboardPage() {
             .from("user_slide_progress")
             .select("course_id, slide_id")
             .eq("user_id", userId)
-            .in("course_id", Array.from(new Set(needCompute)));
+            .in("course_id", uniqueCourseIds);
 
           const doneByCourse: Record<string, Set<string>> = {};
           (progRows ?? []).forEach((r: { course_id: string; slide_id: string }) => {
@@ -378,7 +377,6 @@ export default function DashboardPage() {
           });
 
           enrolledTmp = enrolledTmp.map((e) => {
-            if (!needCompute.includes(e.course_id)) return e;
             const total = Math.max(0, totalSlidesByCourse[e.course_id] ?? 0);
             const done = doneByCourse[e.course_id]?.size ?? 0;
             const pct = total === 0 ? 0 : Math.min(100, Math.round((done / total) * 100));
