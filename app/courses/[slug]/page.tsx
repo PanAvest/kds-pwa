@@ -1,6 +1,7 @@
 // app/courses/[slug]/page.tsx
 import Image from "next/image";
 import EnrollCTA from "@/components/EnrollCTA";
+import NoInternet from "@/components/NoInternet";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 type Course = {
@@ -38,45 +39,47 @@ export default async function CoursePreviewPage(props: {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
-      <div className="grid gap-6 md:grid-cols-[1fr_420px]">
-        {/* Left */}
-        <div className="rounded-2xl bg-white border border-[color:var(--color-light)] overflow-hidden">
-          <div className="relative w-full aspect-video bg-[color:var(--color-light)]/40">
-            <Image
-              src={course.img || "/project-management.png"}
-              alt={course.title}
-              fill
-              sizes="(max-width:768px) 100vw, 60vw"
-              className="object-cover"
-              priority
-            />
+    <NoInternet>
+      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+        <div className="grid gap-6 md:grid-cols-[1fr_420px]">
+          {/* Left */}
+          <div className="rounded-2xl bg-white border border-[color:var(--color-light)] overflow-hidden">
+            <div className="relative w-full aspect-video bg-[color:var(--color-light)]/40">
+              <Image
+                src={course.img || "/project-management.png"}
+                alt={course.title}
+                fill
+                sizes="(max-width:768px) 100vw, 60vw"
+                className="object-cover"
+                priority
+              />
+            </div>
+            <div className="p-5">
+              <h1 className="text-2xl font-semibold">{course.title}</h1>
+              {course.description && (
+                <p className="mt-2 text-[var(--color-text-muted)]">{course.description}</p>
+              )}
+            </div>
           </div>
-          <div className="p-5">
-            <h1 className="text-2xl font-semibold">{course.title}</h1>
-            {course.description && (
-              <p className="mt-2 text-[var(--color-text-muted)]">{course.description}</p>
-            )}
-          </div>
+
+          {/* Right */}
+          <aside className="rounded-2xl bg-white border border-[color:var(--color-light)] p-5 h-max">
+            <div className="text-sm text-[var(--color-text-muted)]">Price</div>
+            <div className="mt-1 text-2xl font-semibold">
+              GHS {Number(course.price ?? 0).toFixed(2)}
+            </div>
+            <div className="mt-2 text-sm">
+              CPPD: <b>{course.cpd_points ?? 0}</b>
+            </div>
+
+            <EnrollCTA courseId={course.id} slug={course.slug} className="mt-5 w-full text-center block" />
+
+            <div className="mt-4 text-xs text-[var(--color-text-muted)]">
+              One-time payment. Access tied to your account.
+            </div>
+          </aside>
         </div>
-
-        {/* Right */}
-        <aside className="rounded-2xl bg-white border border-[color:var(--color-light)] p-5 h-max">
-          <div className="text-sm text-[var(--color-text-muted)]">Price</div>
-          <div className="mt-1 text-2xl font-semibold">
-            GHS {Number(course.price ?? 0).toFixed(2)}
-          </div>
-          <div className="mt-2 text-sm">
-            CPPD: <b>{course.cpd_points ?? 0}</b>
-          </div>
-
-          <EnrollCTA courseId={course.id} slug={course.slug} className="mt-5 w-full text-center block" />
-
-          <div className="mt-4 text-xs text-[var(--color-text-muted)]">
-            One-time payment. Access tied to your account.
-          </div>
-        </aside>
       </div>
-    </div>
+    </NoInternet>
   );
 }

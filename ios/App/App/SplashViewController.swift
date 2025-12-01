@@ -45,6 +45,8 @@ class SplashViewController: UIViewController {
     }()
 
     private var hasDismissed = false
+    private var earliestHideDate = Date()
+    private var pendingHideWorkItem: DispatchWorkItem?
     private var fallbackWorkItem: DispatchWorkItem?
 
     override func viewDidLoad() {
@@ -55,6 +57,7 @@ class SplashViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        earliestHideDate = Date().addingTimeInterval(5.0)
         startProgressAnimation()
         scheduleFallbackDismiss()
     }
@@ -100,7 +103,21 @@ class SplashViewController: UIViewController {
 
     func fadeOutAndDismiss() {
         guard !hasDismissed else { return }
+        let now = Date()
+
+        if now < earliestHideDate {
+            let delay = earliestHideDate.timeIntervalSince(now)
+            pendingHideWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                self?.fadeOutAndDismiss()
+            }
+            pendingHideWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+            return
+        }
+
         hasDismissed = true
+        pendingHideWorkItem?.cancel()
         fallbackWorkItem?.cancel()
 
         UIView.animate(withDuration: 0.35, animations: {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import * as pdfjs from "pdfjs-dist";
+import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { isIOSApp } from "@/lib/platform";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -55,6 +56,7 @@ export default function EbookDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
   const isIOS = useMemo(() => isIOSApp(), []);
+  const { isOffline, markOffline, markOnline } = useOfflineMonitor();
 
   const [ebook, setEbook] = useState<Ebook | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -85,6 +87,14 @@ export default function EbookDetailPage() {
   const lastContainerWidthRef = useRef<number>(0);
 
   const dashboardHref = "/dashboard";
+  const flagOfflineFromError = useCallback((err: unknown) => {
+    const msg = (err as any)?.message;
+    if (!msg || typeof msg !== "string") return;
+    const lower = msg.toLowerCase();
+    if (lower.includes("network") || lower.includes("fetch") || lower.includes("offline")) {
+      markOffline();
+    }
+  }, [markOffline]);
 
   /** Block basic copying/printing (best-effort) */
   useEffect(() => {
@@ -143,28 +153,35 @@ export default function EbookDetailPage() {
         if (!r.ok) throw new Error(j?.error || r.statusText);
         const raw = (j && typeof j === "object" && "ebook" in j) ? (j as any).ebook : j;
         setEbook(raw as Ebook);
+        markOnline();
       } catch (e) {
         setErr((e as Error).message);
+        markOffline();
       }
     })();
-  }, [slug]);
+  }, [slug, markOffline, markOnline]);
 
   /** Ownership check */
   useEffect(() => {
     (async () => {
       if (!ebook?.id) { setOwn({ kind: "loading" }); return; }
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setOwn({ kind: "signed_out" }); return; }
-      const { data, error } = await supabase
-        .from("ebook_purchases")
-        .select("status")
-        .eq("user_id", user.id)
-        .eq("ebook_id", ebook.id)
-        .maybeSingle();
-      if (error) { setOwn({ kind: "not_owner" }); return; }
-      setOwn(data?.status === "paid" ? { kind: "owner" } : { kind: "not_owner" });
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setOwn({ kind: "signed_out" }); return; }
+        const { data, error } = await supabase
+          .from("ebook_purchases")
+          .select("status")
+          .eq("user_id", user.id)
+          .eq("ebook_id", ebook.id)
+          .maybeSingle();
+        if (error) { setOwn({ kind: "not_owner" }); flagOfflineFromError(error); return; }
+        setOwn(data?.status === "paid" ? { kind: "owner" } : { kind: "not_owner" });
+      } catch (e) {
+        setOwn({ kind: "not_owner" });
+        flagOfflineFromError(e);
+      }
     })();
-  }, [ebook?.id]);
+  }, [ebook?.id, flagOfflineFromError]);
 
   /** Handle Paystack return (?reference=...) + polling */
   useEffect(() => {
@@ -179,8 +196,8 @@ export default function EbookDetailPage() {
       try {
         await fetch(`/api/payments/paystack/verify?reference=${encodeURIComponent(ref)}`, { method: "GET" })
           .then((r) => r.json())
-          .catch(() => null);
-      } catch {}
+          .catch((err) => { flagOfflineFromError(err); return null; });
+      } catch (err) { flagOfflineFromError(err); }
 
       while (!stopped && tries < 15) {
         tries += 1;
@@ -198,7 +215,8 @@ export default function EbookDetailPage() {
             router.replace(`/ebooks/${encodeURIComponent(slug)}`);
             return;
           }
-        } catch {}
+          if (error) flagOfflineFromError(error);
+        } catch (err) { flagOfflineFromError(err); }
         await new Promise((r) => setTimeout(r, 2000));
       }
       setVerifying(null);
@@ -215,13 +233,30 @@ export default function EbookDetailPage() {
     if (!Number.isFinite(numeric)) return "GH₵ 0.00";
     return `GH₵ ${(numeric / 100).toFixed(2)}`;
   }, [ebook]);
-  const iosPurchaseNote =
-    "On iOS, this app lets you sign in and access e-books you have already obtained through KDS Learning on other platforms. Purchases are done outside the iOS app.";
+  const iosAccessRequired = (
+    <div className="space-y-2 text-sm text-muted">
+      <div className="text-base font-semibold text-ink">Access Required</div>
+      <p>
+        This mobile app allows you to sign in and use any books or knowledge materials that are already part of your KDS Learning account.
+      </p>
+      <p>
+        To unlock this item, please ensure it has been added to your account on the KDS Learning website: www.panavestkds.com.
+      </p>
+      <p>
+        If it is already available on your account, simply sign in with the same details here and it will appear automatically.
+      </p>
+    </div>
+  );
+  const iosHasAccess = (
+    <div className="text-sm text-muted">
+      You already have access to this material. Tap below to open it.
+    </div>
+  );
 
   /** Start Paystack */
   async function handleBuy() {
     if (isIOS) {
-      setErr(iosPurchaseNote);
+      setErr("Access Required");
       return;
     }
     const { data: { user } } = await supabase.auth.getUser();
@@ -245,6 +280,7 @@ export default function EbookDetailPage() {
       window.location.replace(data.authorization_url as string);
     } catch (e) {
       setErr((e as Error).message || "Payment init failed");
+      flagOfflineFromError(e);
     } finally {
       setBuying(false);
     }
@@ -258,10 +294,17 @@ export default function EbookDetailPage() {
     const accessToken = session?.access_token;
     if (!accessToken) { setRenderError("You must be signed in to read this e-book."); return null; }
 
-    const res = await fetch(`/api/ebooks/secure-pdf?ebookId=${encodeURIComponent(ebook.id)}`, {
-      credentials: "include", cache: "no-store",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    let res: Response;
+    try {
+      res = await fetch(`/api/ebooks/secure-pdf?ebookId=${encodeURIComponent(ebook.id)}`, {
+        credentials: "include", cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } catch (err) {
+      flagOfflineFromError(err);
+      setRenderError("Secure PDF request failed. Check your connection.");
+      return null;
+    }
 
     if (res.status === 401) {
       setRenderError("Session expired or not signed in. Please sign in again.");
@@ -278,7 +321,7 @@ export default function EbookDetailPage() {
     const doc = await loadingTask.promise;
     pdfDocRef.current = doc;
     return doc;
-  }, [ebook?.id]);
+  }, [ebook?.id, flagOfflineFromError, router, slug]);
 
   /** Core renderer with correct scaling and scroll behavior */
   const renderPdf = useCallback(async () => {
@@ -321,10 +364,11 @@ export default function EbookDetailPage() {
       scroller.scrollTop = 0;
     } catch (e) {
       setRenderError((e as Error).message || "Failed to load PDF");
+      flagOfflineFromError(e);
     } finally {
       setRendering(false);
     }
-  }, [ensurePdfDoc, fitMode, zoom]);
+  }, [ensurePdfDoc, fitMode, zoom, flagOfflineFromError]);
 
   /** Open reader and render */
   function openReader() {
@@ -378,6 +422,10 @@ export default function EbookDetailPage() {
   }, [showReader]);
 
   /** UI */
+  if (isOffline) {
+    return <NoInternet forceOffline />;
+  }
+
   if (err) {
     return (
       <main className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-10">
@@ -433,9 +481,9 @@ export default function EbookDetailPage() {
               <h1 className="text-2xl font-bold">{ebook.title}</h1>
               <div className="mt-2 text-sm text-muted">Price</div>
               <div className="text-xl font-semibold">{price}</div>
-              {isIOS && (
-                <div className="mt-2 rounded-md bg-[color:var(--color-light)]/60 text-xs text-muted px-3 py-2">
-                  {iosPurchaseNote}
+              {isIOS && own.kind !== "owner" && (
+                <div className="mt-2 rounded-md bg-[color:var(--color-light)]/60 text-xs text-muted px-3 py-2 space-y-1">
+                  {iosAccessRequired}
                 </div>
               )}
 
@@ -449,32 +497,39 @@ export default function EbookDetailPage() {
                 )}
 
                 {own.kind === "signed_out" && (
-                  <>
-                    <Link
-                      href={`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`}
-                      className="inline-flex items-center justify-center rounded-lg bg-brand text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
-                    >
-                      {isIOS ? "Sign in" : "Sign in to buy"}
-                    </Link>
-                    <Link
-                      href={dashboardHref}
-                      className="inline-flex items-center justify-center rounded-lg px-5 py-3 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50 w-full sm:w-auto"
-                    >
-                      Go to Dashboard
-                    </Link>
-                    {isIOS && (
-                      <div className="text-xs text-muted">
-                        If you already obtained access elsewhere, sign in with the same KDS Learning account.
-                      </div>
-                    )}
-                  </>
+                  isIOS ? (
+                    <>
+                      {iosAccessRequired}
+                      <Link
+                        href={`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`}
+                        className="inline-flex items-center justify-center rounded-lg bg-brand text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
+                      >
+                        Sign in to access
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href={`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`}
+                        className="inline-flex items-center justify-center rounded-lg bg-brand text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
+                      >
+                        Sign in to buy
+                      </Link>
+                      <Link
+                        href={dashboardHref}
+                        className="inline-flex items-center justify-center rounded-lg px-5 py-3 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50 w-full sm:w-auto"
+                      >
+                        Go to Dashboard
+                      </Link>
+                    </>
+                  )
                 )}
 
                 {own.kind === "not_owner" && (
                   isIOS ? (
                     <>
-                      <div className="rounded-md bg-[color:var(--color-light)]/60 px-4 py-3 text-sm text-muted">
-                        {iosPurchaseNote}
+                      <div className="rounded-md bg-[color:var(--color-light)]/60 px-4 py-3 text-sm text-muted space-y-1">
+                        {iosAccessRequired}
                       </div>
                     </>
                   ) : (
@@ -499,6 +554,7 @@ export default function EbookDetailPage() {
 
                 {own.kind === "owner" && (
                   <>
+                    {isIOS && iosHasAccess}
                     <button
                       onClick={openReader}
                       className="rounded-lg text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
@@ -519,7 +575,7 @@ export default function EbookDetailPage() {
               {own.kind !== "owner" && (
                 <p className="mt-3 text-xs text-muted">
                   {isIOS
-                    ? "If you already have access, sign in with the same KDS Learning account to read."
+                    ? "If it is already on your KDS Learning account, sign in with the same details to read."
                     : "Sign in and purchase to unlock reading."}
                 </p>
               )}
@@ -536,7 +592,7 @@ export default function EbookDetailPage() {
                   <div className="text-lg font-semibold">Access locked</div>
                   <p className="text-sm text-muted mt-1">
                     {isIOS
-                      ? "On iOS, sign in with your KDS Learning account to access e-books you already obtained."
+                      ? "Access Required — make sure this e-book is on your KDS Learning account at www.panavestkds.com. If it already is, sign in here with the same details to open it."
                       : own.kind === "signed_out"
                         ? "Sign in and purchase to read the full e-book."
                         : "Purchase to read the full e-book."}

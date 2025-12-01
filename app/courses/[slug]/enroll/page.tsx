@@ -35,6 +35,20 @@ export default function EnrollPage() {
   const [course, setCourse] = React.useState<Course | null>(null);
   const [notice, setNotice] = React.useState<string>("");
   const isIOS = React.useMemo(() => isIOSApp(), []);
+  const iosAccessRequired = (
+    <div className="space-y-2 text-sm text-muted">
+      <div className="text-base font-semibold text-ink">Access Required</div>
+      <p>
+        This mobile app allows you to sign in and use any books or knowledge materials that are already part of your KDS Learning account.
+      </p>
+      <p>
+        To unlock this item, please ensure it has been added to your account on the KDS Learning website: www.panavestkds.com.
+      </p>
+      <p>
+        If it is already available on your account, simply sign in with the same details here and it will appear automatically.
+      </p>
+    </div>
+  );
 
   // Require auth
   React.useEffect(() => {
@@ -107,7 +121,7 @@ export default function EnrollPage() {
 
   async function payNow() {
     if (isIOS) {
-      setNotice("On iOS, this app is for accessing existing courses. Purchases happen outside the iOS app.");
+      setNotice("This mobile app is for accessing materials already on your KDS Learning account. New items are added via the KDS Learning website.");
       return;
     }
     if (!userId || !email || !course) return;
@@ -154,10 +168,7 @@ export default function EnrollPage() {
           Total: {course.currency} {(course.price_cents / 100).toFixed(2)}
         </div>
         {isIOS ? (
-          <div className="mt-3 space-y-1 text-sm text-muted">
-            <p>On iOS, this app lets you sign in and access courses you have already obtained through KDS Learning on other platforms.</p>
-            <p>If you already have access, sign in with the same KDS Learning account to continue.</p>
-          </div>
+          <div className="mt-3">{iosAccessRequired}</div>
         ) : (
           <button
             type="button"

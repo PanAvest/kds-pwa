@@ -4,6 +4,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { supabase } from "@/lib/supabaseClient";
 
 /* ------------------------------------------------------------------ */
@@ -179,25 +180,44 @@ export default function CourseDashboard() {
   /* UI state */
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string>("");
+  const { isOffline, markOffline, markOnline } = useOfflineMonitor();
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [chaptersOpen, setChaptersOpen] = useState(false); // slide-over
   const initializedRef = useRef(false);
+  const flagOfflineFromError = useCallback((err: unknown) => {
+    const msg = (err as any)?.message;
+    if (!msg || typeof msg !== "string") return;
+    const lower = msg.toLowerCase();
+    if (lower.includes("network") || lower.includes("fetch") || lower.includes("offline")) {
+      markOffline();
+    }
+  }, [markOffline]);
+
+  useEffect(() => {
+    setIsOnline(!isOffline);
+  }, [isOffline]);
 
   /* ========= Auth ========= */
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/auth/sign-in"); return; }
-      setUserId(user.id);
-      setUserEmail(user.email ?? "");
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { router.push("/auth/sign-in"); return; }
+        setUserId(user.id);
+        setUserEmail(user.email ?? "");
+        markOnline();
+      } catch (err) {
+        flagOfflineFromError(err);
+      }
     })();
-  }, [router]);
+  }, [router, flagOfflineFromError, markOnline]);
 
   /* ========= Load data ========= */
   useEffect(() => {
     if (!userId || !slug) return;
     (async () => {
       setLoading(true);
+      try {
 
       // course
       const { data: c } = await supabase
@@ -216,6 +236,7 @@ export default function CourseDashboard() {
         .eq("course_id", c.id)
         .maybeSingle<{ paid: boolean | null }>();
       if (enrErr || !enr || enr.paid !== true) {
+        if (enrErr) flagOfflineFromError(enrErr);
         router.replace(`/courses/${c.slug}/enroll`);
         return;
       }
@@ -373,9 +394,15 @@ export default function CourseDashboard() {
         }
       } catch {}
 
-      setLoading(false);
+      markOnline();
+      } catch (err) {
+        flagOfflineFromError(err);
+        setNotice("Connection issue. Please reconnect and try again.");
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, [userId, slug, router]);
+  }, [userId, slug, router, flagOfflineFromError, markOnline]);
 
   /* ========= Derived orders & gating ========= */
   const orderedSlides = useMemo(() => slides, [slides]);
@@ -717,7 +744,7 @@ export default function CourseDashboard() {
         meta: { autoSubmit: auto, total, correctCount } as Record<string, unknown>,
       });
       setFinalAttemptExists(true);
-    } catch {}
+    } catch (err) { flagOfflineFromError(err); }
     setFinalExamOpen(false);
     setFinalTimeLeft(0);
     setFinalAnswers({});
@@ -760,6 +787,7 @@ export default function CourseDashboard() {
   const [finalResult, setFinalResult] = useState<{ scorePct: number; correct: number; total: number; passed: boolean } | null>(null);
 
   /* ========= Loading guards ========= */
+  if (isOffline) return <NoInternet forceOffline />;
   if (loading) return <div className="mx-auto max-w-screen-lg px-4 py-10">Loading…</div>;
   if (!course) return <div className="mx-auto max-w-screen-lg px-4 py-10">Not found.</div>;
 

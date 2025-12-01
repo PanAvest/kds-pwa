@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Home, Book, Library, LayoutDashboard } from "lucide-react";
 
 export default function BottomTabs() {
   const p = usePathname();
+  const router = useRouter();
   const items = [
     { href: "/", label: "Home", icon: Home },
     { href: "/courses", label: "Programs", icon: Book },
@@ -30,11 +31,21 @@ export default function BottomTabs() {
         {items.map((it) => {
           const Icon = it.icon;
           const active =
-            p === it.href || (it.href !== "/" && p?.startsWith(it.href));
+            (it.href === "/" && p === "/") ||
+            (it.href !== "/" && p?.startsWith(it.href));
           return (
             <li key={it.href}>
               <Link
+                prefetch={false}
                 href={it.href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (p !== it.href) {
+                    router.push(it.href);
+                  } else {
+                    router.refresh();
+                  }
+                }}
                 className={`flex flex-col items-center justify-center py-2 text-xs ${
                   active ? "text-[var(--color-accent-red)]" : "text-gray-600"
                 }`}

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { isIOSApp } from "@/lib/platform";
 
 type Ebook = {
@@ -21,6 +22,7 @@ export default function Ebooks() {
   const sp = useSearchParams();
   const qParam = sp.get("q") ?? "";
   const isIOS = useMemo(() => isIOSApp(), []);
+  const { isOffline, markOffline, markOnline } = useOfflineMonitor();
 
   const [q, setQ] = useState(qParam);
   const [items, setItems] = useState<Ebook[] | null>(null);
@@ -39,14 +41,16 @@ export default function Ebooks() {
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error || r.statusText);
         setItems(Array.isArray(j) ? j : []);
+        markOnline();
       } catch (e) {
         setErr((e as Error).message);
         setItems([]);
+        markOffline();
       } finally {
         setLoading(false);
       }
     })();
-  }, [qParam]);
+  }, [qParam, markOffline, markOnline]);
 
   const headerNote = useMemo(() => {
     if (loading) return "Searching…";
@@ -64,13 +68,14 @@ export default function Ebooks() {
   }
 
   return (
+    <NoInternet forceOffline={isOffline}>
     <main className="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">E-Books</h1>
           <p className="mt-1 text-muted max-w-2xl text-sm sm:text-base">
             {isIOS
-              ? "On iOS, this app lets you sign in and access e-books you have already obtained through KDS Learning elsewhere."
+              ? "Access Required — This mobile app allows you to sign in and use any books or knowledge materials that are already part of your KDS Learning account. To unlock new items, please ensure they have been added on www.panavestkds.com. Sign in here with the same details to see them automatically."
               : "Buy to unlock reading. Your purchases appear in the Dashboard."}
           </p>
         </div>
@@ -143,5 +148,6 @@ export default function Ebooks() {
         </div>
       )}
     </main>
+    </NoInternet>
   );
 }
