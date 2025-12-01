@@ -4,6 +4,7 @@ import type { Metadata } from "next"
 import { ToastHost } from "@/components/ui/toast"
 import LoadingOverlay from "@/components/LoadingOverlay"
 import ReadySignal from "./ReadySignal"
+import { Analytics } from "@vercel/analytics/next"
 
 export const metadata: Metadata = {
   title: "KDS Learning",
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
 
+        <Analytics />
         <ToastHost />
       </body>
     </html>
