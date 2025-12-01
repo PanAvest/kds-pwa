@@ -9,18 +9,16 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Params = { slug: string };
 
-const INTERACTIVE_MAP: Record<string, string> = {
-  "ghie-business-ethics": "/interactive/ghie-business-ethics",
-  // add more mappings if interactive_path is not set in DB
-};
+const MAIN_SITE_ORIGIN =
+  process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN ?? "https://panavestkds.com";
 
-function InteractivePlayer({ interactiveUrl }: { interactiveUrl: string }) {
+function InteractivePlayer({ src, title = "Interactive course" }: { src: string; title?: string }) {
   return (
     <div className="mt-4">
       <div className="aspect-[16/9] w-full overflow-hidden rounded-xl border border-light bg-black">
         <iframe
-          src={interactiveUrl}
-          title="Interactive course"
+          src={src}
+          title={title}
           className="h-full w-full border-0"
           allowFullScreen
         />
@@ -31,7 +29,7 @@ function InteractivePlayer({ interactiveUrl }: { interactiveUrl: string }) {
 
 export default function KnowledgeDashboardPage() {
   const { slug } = useParams<Params>();
-  const [interactivePath, setInteractivePath] = useState<string | null>(null);
+  const [course, setCourse] = useState<{ interactive_path: string | null } | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -42,30 +40,36 @@ export default function KnowledgeDashboardPage() {
           .select("interactive_path")
           .eq("slug", slug)
           .maybeSingle();
-        if (!error && data?.interactive_path) {
-          setInteractivePath(data.interactive_path);
-        } else {
-          setInteractivePath(null);
-        }
+        if (!error && data) {
+          setCourse({ interactive_path: data.interactive_path ?? null });
+        } else setCourse(null);
       } catch {
-        setInteractivePath(null);
+        setCourse(null);
       }
     })();
   }, [slug]);
 
-  const origin =
-    process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN ||
-    process.env.NEXT_PUBLIC_PUBLIC_WEB_BASE_URL ||
-    (typeof window !== "undefined" && window.location ? window.location.origin : "https://kdslearning.com");
-
   const interactiveUrl = useMemo(() => {
-    const mapped = slug && INTERACTIVE_MAP[slug] ? INTERACTIVE_MAP[slug] : null;
-    const path = interactivePath || mapped;
-    if (!path) return null;
-    const isHttp = /^https?:\/\//i.test(path);
-    const normalizedPath = path.endsWith(".html") ? path : `${path}/index.html`;
-    return isHttp ? normalizedPath : `${origin}${normalizedPath}`;
-  }, [origin, slug, interactivePath]);
+    if (!course?.interactive_path) return null;
+
+    const raw = course.interactive_path.trim();
+
+    // If Supabase already stores a full URL, just use it.
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
+
+    // Otherwise treat it as the same relative path the main site uses,
+    // e.g. "/interactive/ghie-business-ethics" or "/interactive/ghie-business-ethics/index.html"
+    const normalizedPath = raw.startsWith("/") ? raw : `/${raw}`;
+
+    // Ensure we end on an html file – if it doesn't already end with .html, append /index.html
+    const withIndex = normalizedPath.endsWith(".html")
+      ? normalizedPath
+      : `${normalizedPath.replace(/\/+$/, "")}/index.html`;
+
+    return `${MAIN_SITE_ORIGIN}${withIndex}`;
+  }, [course?.interactive_path]);
 
   if (!slug) {
     return (
@@ -82,13 +86,21 @@ export default function KnowledgeDashboardPage() {
 
       {interactiveUrl ? (
         <>
-          <InteractivePlayer interactiveUrl={interactiveUrl} />
-          <p className="mt-2 text-[10px] text-gray-500">
-            Current interactive URL: <span className="font-mono break-all">{interactiveUrl}</span>
+          <InteractivePlayer src={interactiveUrl} title="Interactive course player" />
+          <div className="text-xs text-muted">
+            If it does not load,{" "}
+            <a className="underline" href={interactiveUrl} target="_blank" rel="noreferrer">
+              open in a new tab
+            </a>.
+          </div>
+          <p className="mt-1 text-[10px] text-gray-500 break-all">
+            Current interactive URL: <span className="font-mono">{interactiveUrl}</span>
           </p>
         </>
       ) : (
-        <p className="mt-4 text-sm text-muted">No interactive content mapped for this course.</p>
+        <div className="text-sm text-red-700">
+          Interactive entry path is not configured for this course.
+        </div>
       )}
     </main>
   );
