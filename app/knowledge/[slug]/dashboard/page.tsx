@@ -86,7 +86,14 @@ export default function KnowledgeDashboardPage() {
 
       {interactiveUrl ? (
         <>
-          <InteractivePlayer src={interactiveUrl} title="Interactive course player" />
+          <div className="mt-3 w-full rounded-xl overflow-hidden border border-light bg-black">
+                    <iframe
+                      src={interactiveUrl}
+                      title="Interactive course player"
+                      className="w-full h-[70vh] bg-black"
+                      allowFullScreen
+                    />
+                  </div>
           <div className="text-xs text-muted">
             If it does not load,{" "}
             <a className="underline" href={interactiveUrl} target="_blank" rel="noreferrer">
