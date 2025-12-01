@@ -1,3 +1,7 @@
+// Behaviour: Dashboard per README-upgrade.md. Aligns PWA with main site: slide-based progress, purchased e-books,
+// quiz history, issued + provisional certificates with verify URLs, and download flow that splits web (jsPDF.save)
+// vs native (Filesystem + Share). Manual test: check cert cards render with QR verify link, download works in browser
+// and opens share sheet on device, provisional appears after 100% slides + passed exam without a certificate row.
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -7,6 +11,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 import { ProgressBar } from "@/components/ProgressBar";
+import SimpleCertificate from "@/components/SimpleCertificate";
+import { isNativePlatform, savePdfToDevice } from "@/lib/nativeDownload";
 
 /* Types */
 type CourseRow = { id: string; slug: string; title: string; img: string | null; cpd_points: number | null };
@@ -23,6 +29,40 @@ type ChapterInfo = { id: string; title: string; order_index: number; course_id: 
 type ProfileRow = { id: string; full_name: string | null; updated_at?: string | null };
 
 type CourseMeta = { title: string; slug: string; cpd_points?: number | null; img?: string | null };
+type CertificateRow = {
+  id: string;
+  user_id: string;
+  course_id: string;
+  attempt_id?: string | null;
+  certificate_no?: string | null;
+  issued_at?: string | null;
+  courses?: CourseRow | CourseRow[] | null;
+};
+type AttemptRow = { id: string; exam_id?: string | null; score: number | null; passed: boolean | null; created_at?: string | null };
+type ExamRow = { id: string; course_id: string; title: string | null; pass_mark: number | null };
+type CertificateView = {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  courseSlug?: string;
+  courseImg?: string | null;
+  cpdPoints?: number | null;
+  certificateNo: string;
+  issuedAt: string;
+  scorePct?: number | null;
+  verifyUrl: string;
+  attemptId?: string | null;
+};
+type ProvisionalCertificate = {
+  courseId: string;
+  courseTitle: string;
+  courseSlug?: string;
+  courseImg?: string | null;
+  cpdPoints?: number | null;
+  certificateNo: string;
+  issuedAt: string;
+  scorePct?: number | null;
+};
 
 function pickCourse(c: CourseRow | CourseRow[] | null | undefined): CourseRow | null {
   if (!c) return null;
@@ -33,7 +73,140 @@ function pickEbook(e: EbookRow | EbookRow[] | null | undefined): EbookRow | null
   return Array.isArray(e) ? (e[0] ?? null) : e;
 }
 
+const makeKdsCertId = (u: string, courseId?: string) =>
+  `KDS-${u.slice(0, 8).toUpperCase()}${courseId ? `-${courseId.slice(0, 6).toUpperCase()}` : ""}`;
+
 const PANABLUE = "#0a1156";
+
+async function toDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.error("toDataUrl failed", e);
+    return null;
+  }
+}
+
+function makeGradientDataUrl(width: number, height: number, start = PANABLUE, end = "#142ba0") {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const gradient = ctx.createLinearGradient(0, 0, width, 0);
+  gradient.addColorStop(0, start);
+  gradient.addColorStop(1, end);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  return canvas.toDataURL("image/png");
+}
+
+type DownloadCertOptions = {
+  certNumber: string;
+  recipient: string;
+  courseTitle: string;
+  issuedAt: string;
+  verifyUrl?: string | null;
+  cpdPoints?: number | null;
+  scorePct?: number | null;
+};
+
+// Manual test: click download on a certificate. On web it should save directly; on native it should open a share/save
+// sheet. Verify QR encodes the verify URL.
+async function downloadCertPdf(options: DownloadCertOptions) {
+  const { certNumber, recipient, courseTitle, issuedAt, verifyUrl, cpdPoints, scorePct } = options;
+  const filename = certNumber ? `PanAvest-Certificate-${certNumber}.pdf` : "PanAvest-Certificate.pdf";
+  const origin = typeof window !== "undefined" && window.location ? window.location.origin : "https://kdslearning.com";
+
+  try {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 16;
+
+    // Border
+    doc.setDrawColor(10, 17, 86);
+    doc.setLineWidth(1);
+    doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin, "S");
+
+    // Header gradient
+    const grad = typeof window !== "undefined" ? makeGradientDataUrl(800, 80) : null;
+    if (grad) doc.addImage(grad, "PNG", 0, 0, pageWidth, 22);
+
+    // Logo
+    const logoUrl = `${origin}/logo.png`;
+    const logoData = typeof window !== "undefined" ? await toDataUrl(logoUrl) : null;
+    if (logoData) doc.addImage(logoData, "PNG", margin, 8, 24, 12);
+
+    doc.setFontSize(18);
+    doc.setTextColor(10, 17, 86);
+    doc.text("Knowledge Development Series", pageWidth / 2, 20, { align: "center" });
+
+    doc.setTextColor(60, 60, 60);
+    doc.setFontSize(12);
+    doc.text("Certificate of Completion", pageWidth / 2, 30, { align: "center" });
+
+    doc.setFontSize(22);
+    doc.setTextColor(10, 17, 86);
+    doc.text(recipient || "Learner", pageWidth / 2, 52, { align: "center" });
+
+    doc.setFontSize(12);
+    doc.setTextColor(80, 80, 80);
+    doc.text("has successfully completed", pageWidth / 2, 62, { align: "center" });
+
+    doc.setFontSize(16);
+    doc.setTextColor(20, 20, 20);
+    doc.text(courseTitle || "Course", pageWidth / 2, 72, { align: "center" });
+
+    doc.setFontSize(11);
+    doc.text("For successfully completing the prescribed curriculum and assessments.", pageWidth / 2, 82, {
+      align: "center",
+    });
+
+    const issuedDate = new Date(issuedAt);
+    const issuedStr = isNaN(issuedDate.getTime()) ? issuedAt : issuedDate.toLocaleDateString();
+
+    doc.setTextColor(30, 30, 30);
+    doc.text(`Certificate No: ${certNumber}`, margin, 100);
+    doc.text(`Issued: ${issuedStr}`, margin, 108);
+    if (typeof cpdPoints === "number") doc.text(`CPD Points: ${cpdPoints}`, margin, 116);
+    if (typeof scorePct === "number") doc.text(`Score: ${scorePct}%`, margin, 124);
+
+    // Signature placeholder
+    doc.text("Authorized Signatory", margin, pageHeight - 40);
+    doc.text("Prof. Douglas Boateng", margin, pageHeight - 34);
+    doc.text("D.Prof., FCILT, FIoD, FIOM, FAC, FIAM, FCIPS, FIC", margin, pageHeight - 30);
+
+    // QR code
+    if (verifyUrl) {
+      const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(verifyUrl)}&size=300&margin=1`;
+      const qrData = typeof window !== "undefined" ? await toDataUrl(qrUrl) : null;
+      if (qrData) {
+        const size = 40;
+        doc.addImage(qrData, "PNG", pageWidth - margin - size, pageHeight - margin - size - 4, size, size);
+        doc.setFontSize(9);
+        doc.text("Scan to verify", pageWidth - margin - size / 2, pageHeight - margin - size - 8, { align: "center" });
+      }
+    }
+
+    if (isNativePlatform()) {
+      const blob = doc.output("blob");
+      await savePdfToDevice(filename, blob);
+    } else {
+      doc.save(filename);
+    }
+  } catch (err) {
+    console.error("downloadCertPdf failed", err);
+  }
+}
 
 /* Simple section wrapper */
 function Section({ title, children, anchor }: { title: string; children: React.ReactNode; anchor?: string }) {
@@ -86,6 +259,8 @@ export default function DashboardPage() {
   const [quiz, setQuiz] = useState<QuizAttempt[]>([]);
   const [chaptersById, setChaptersById] = useState<Record<string, ChapterInfo>>({});
   const [courseMetaMap, setCourseMetaMap] = useState<Record<string, CourseMeta>>({});
+  const [certificates, setCertificates] = useState<CertificateView[]>([]);
+  const [provisionalCerts, setProvisionalCerts] = useState<ProvisionalCertificate[]>([]);
 
   /* Auth gate */
   useEffect(() => {
@@ -262,6 +437,136 @@ export default function DashboardPage() {
           setChaptersById(map);
         }
 
+        // Certificates + provisional logic
+        const origin = typeof window !== "undefined" && window.location ? window.location.origin : "https://kdslearning.com";
+        let certRows: CertificateRow[] = [];
+        try {
+          const { data: certData, error: certErr } = await supabase
+            .from("certificates")
+            .select("id,user_id,course_id,attempt_id,certificate_no,issued_at,courses:course_id(id,title,slug,img,cpd_points)")
+            .eq("user_id", userId)
+            .order("issued_at", { ascending: false });
+          if (certErr && (certErr as any)?.code === "42703") {
+            const { data: certFallback } = await supabase
+              .from("certificates")
+              .select("id,user_id,course_id,attempt_id,issued_at")
+              .eq("user_id", userId)
+              .order("issued_at", { ascending: false });
+            certRows = (certFallback as unknown as CertificateRow[]) ?? [];
+          } else {
+            certRows = (certData as unknown as CertificateRow[]) ?? [];
+          }
+        } catch (e) {
+          console.error("certificates fetch failed", e);
+        }
+
+        const attemptIds = Array.from(new Set(certRows.map((c) => c.attempt_id).filter(Boolean) as string[]));
+        const attemptMap: Record<string, AttemptRow> = {};
+        if (attemptIds.length > 0) {
+          const { data: attRows } = await supabase
+            .from("attempts")
+            .select("id, exam_id, score, passed, created_at")
+            .in("id", attemptIds);
+          (attRows as unknown as AttemptRow[] | null | undefined)?.forEach((a) => {
+            attemptMap[a.id] = a;
+          });
+        }
+
+        const missingCourseIds = certRows
+          .map((c) => c.course_id)
+          .filter((cid) => !metaTmp[cid] && !pickCourse(certRows.find((row) => row.course_id === cid)?.courses));
+        const hydratedMeta: Record<string, CourseMeta> = {};
+        if (missingCourseIds.length > 0) {
+          const { data: courseRows } = await supabase
+            .from("courses")
+            .select("id,title,slug,img,cpd_points")
+            .in("id", Array.from(new Set(missingCourseIds)));
+          (courseRows as CourseRow[] | null | undefined)?.forEach((c) => {
+            hydratedMeta[c.id] = { title: c.title, slug: c.slug, img: c.img ?? null, cpd_points: c.cpd_points ?? null };
+          });
+        }
+
+        const certViews: CertificateView[] = certRows.map((c) => {
+          const meta = pickCourse(c.courses) || metaTmp[c.course_id] || hydratedMeta[c.course_id] || { title: "Course", slug: "", img: null, cpd_points: null };
+          const certNumber = (c.certificate_no || "").trim() || makeKdsCertId(userId, c.course_id);
+          const attempt = c.attempt_id ? attemptMap[c.attempt_id] : undefined;
+          const issuedAt = c.issued_at || attempt?.created_at || new Date().toISOString();
+          const verifyUrl = `${origin}/verify?cert_id=${encodeURIComponent(c.id)}`;
+          return {
+            id: c.id,
+            courseId: c.course_id,
+            courseTitle: meta.title,
+            courseSlug: meta.slug,
+            courseImg: meta.img,
+            cpdPoints: meta.cpd_points,
+            certificateNo: certNumber,
+            issuedAt,
+            scorePct: typeof attempt?.score === "number" ? attempt.score : null,
+            verifyUrl,
+            attemptId: c.attempt_id ?? undefined,
+          };
+        });
+        setCertificates(certViews);
+
+        // Provisional certificates (100% progress + passed exam, but no certificate row)
+        const progressByCourse: Record<string, number> = {};
+        enrolledTmp.forEach((e) => {
+          progressByCourse[e.course_id] = e.progress_pct;
+        });
+        const completedCourses = Object.entries(progressByCourse)
+          .filter(([, pct]) => pct >= 100)
+          .map(([cid]) => cid);
+        const coursesWithoutCert = completedCourses.filter((cid) => !certRows.some((c) => c.course_id === cid));
+
+        if (coursesWithoutCert.length > 0) {
+          const { data: examRows } = await supabase
+            .from("exams")
+            .select("id,course_id,title,pass_mark")
+            .in("course_id", coursesWithoutCert);
+          const examIds = Array.from(new Set((examRows ?? []).map((e: any) => e.id).filter(Boolean)));
+          let examAttempts: AttemptRow[] = [];
+          if (examIds.length > 0) {
+            const { data: attemptRows } = await supabase
+              .from("attempts")
+              .select("id, exam_id, score, passed, created_at")
+              .eq("user_id", userId)
+              .in("exam_id", examIds)
+              .order("created_at", { ascending: false });
+            examAttempts = (attemptRows as unknown as AttemptRow[]) ?? [];
+          }
+
+          const latestByExam: Record<string, AttemptRow> = {};
+          examAttempts.forEach((a) => {
+            if (!a.exam_id) return;
+            if (!latestByExam[a.exam_id]) latestByExam[a.exam_id] = a;
+          });
+
+          const provisional: ProvisionalCertificate[] = [];
+          (examRows as ExamRow[] | null | undefined)?.forEach((exam) => {
+            const attempt = latestByExam[exam.id];
+            if (!attempt) return;
+            const passMark = Number(exam.pass_mark ?? 0);
+            const passed = (!!attempt.passed || (attempt.score ?? 0) >= passMark) && (attempt.score ?? 0) >= passMark;
+            if (!passed) return;
+            const meta = metaTmp[exam.course_id] || hydratedMeta[exam.course_id];
+            provisional.push({
+              courseId: exam.course_id,
+              courseTitle: meta?.title ?? "Course",
+              courseSlug: meta?.slug,
+              courseImg: meta?.img,
+              cpdPoints: meta?.cpd_points ?? null,
+              certificateNo: makeKdsCertId(userId, exam.course_id),
+              issuedAt: attempt.created_at ?? new Date().toISOString(),
+              scorePct: attempt.score ?? null,
+            });
+          });
+          setProvisionalCerts(provisional);
+        } else {
+          setProvisionalCerts([]);
+        }
+
+        setCourseMetaMap((prev) => ({ ...prev, ...metaTmp, ...hydratedMeta }));
+
         setLoading(false);
       } catch (e) {
         console.error("dashboard load failed:", e);
@@ -432,6 +737,121 @@ export default function DashboardPage() {
                     >
                       Resume
                     </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* 3) Course Certificates */}
+        <Section title="Course certificates">
+          {loading ? (
+            <div className="px-4"><div className="h-32 rounded-xl bg-white border border-light animate-pulse" /></div>
+          ) : certificates.length === 0 && provisionalCerts.length === 0 ? (
+            <div className="px-4">
+              <div className="rounded-xl border border-light bg-white p-4">
+                <p className="text-sm text-muted">No certificates yet. Complete your courses and exams to unlock them.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 grid gap-4">
+              {certificates.map((c) => (
+                <div key={c.id} className="rounded-xl border border-light bg-white overflow-hidden">
+                  <div className="relative w-full h-28">
+                    <Image
+                      src={c.courseImg || "/project-management.png"}
+                      alt={c.courseTitle}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-black/5" />
+                    <div className="absolute bottom-2 left-3 text-white font-semibold text-sm">{c.courseTitle}</div>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <div className="text-xs text-muted">
+                      Issued: {new Date(c.issuedAt).toLocaleDateString()} · Cert No: {c.certificateNo}
+                      {typeof c.scorePct === "number" ? ` · Score: ${c.scorePct}%` : ""}
+                    </div>
+                    <SimpleCertificate
+                      recipient={fullName || "Learner"}
+                      course={c.courseTitle}
+                      date={c.issuedAt}
+                      certId={c.certificateNo}
+                      qrValue={c.verifyUrl}
+                      qrProvider="quickchart"
+                    />
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {c.courseSlug && (
+                        <Link
+                          href={`/courses/${c.courseSlug}/dashboard`}
+                          className="text-xs rounded-md px-3 py-1.5 bg-[color:var(--color-light)]"
+                        >
+                          View course
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          downloadCertPdf({
+                            certNumber: c.certificateNo,
+                            recipient: fullName || "Learner",
+                            courseTitle: c.courseTitle,
+                            issuedAt: c.issuedAt,
+                            verifyUrl: c.verifyUrl,
+                            cpdPoints: c.cpdPoints,
+                            scorePct: c.scorePct,
+                          })
+                        }
+                        className="text-xs rounded-md px-3 py-1.5 text-white"
+                        style={{ backgroundColor: PANABLUE }}
+                      >
+                        Download certificate
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {provisionalCerts.map((p) => (
+                <div key={`prov-${p.courseId}`} className="rounded-xl border border-dashed border-light bg-white overflow-hidden">
+                  <div className="relative w-full h-24">
+                    <Image
+                      src={p.courseImg || "/project-management.png"}
+                      alt={p.courseTitle}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-black/5" />
+                    <div className="absolute bottom-2 left-3 text-white font-semibold text-sm">
+                      {p.courseTitle} (Provisional)
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <div className="text-xs text-muted">
+                      Provisional (awaiting issuance) · Passed on {new Date(p.issuedAt).toLocaleDateString()}
+                      {typeof p.scorePct === "number" ? ` · Score: ${p.scorePct}%` : ""}
+                    </div>
+                    <SimpleCertificate
+                      recipient={fullName || "Learner"}
+                      course={p.courseTitle}
+                      date={p.issuedAt}
+                      certId={p.certificateNo}
+                      qrProvider="none"
+                      showPrint
+                    />
+                    {p.courseSlug && (
+                      <div className="flex justify-end">
+                        <Link
+                          href={`/courses/${p.courseSlug}/dashboard`}
+                          className="text-xs rounded-md px-3 py-1.5 bg-[color:var(--color-light)]"
+                        >
+                          View course
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
