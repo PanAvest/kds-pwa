@@ -54,8 +54,9 @@ export default function KnowledgeDashboardPage() {
   }, [slug]);
 
   const origin =
+    process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN ||
     process.env.NEXT_PUBLIC_PUBLIC_WEB_BASE_URL ||
-    (typeof window !== "undefined" && window.location ? window.location.origin : "https://kds-pwa.vercel.app");
+    (typeof window !== "undefined" && window.location ? window.location.origin : "https://kdslearning.com");
 
   const interactiveUrl = useMemo(() => {
     const mapped = slug && INTERACTIVE_MAP[slug] ? INTERACTIVE_MAP[slug] : null;
