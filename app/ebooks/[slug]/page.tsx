@@ -242,7 +242,7 @@ export default function EbookDetailPage() {
     }
   }
 
-  /** Load PDF bytes via secure route */
+  /** Load PDF bytes via secure route with bearer token, mirroring main app */
   const ensurePdfDoc = useCallback(async (): Promise<PdfDoc | null> => {
     if (pdfDocRef.current) return pdfDocRef.current;
     if (!ebook?.id) return null;
@@ -255,8 +255,13 @@ export default function EbookDetailPage() {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
-    if (res.status === 401) { setRenderError("Session expired or not signed in. Please sign in again."); return null; }
+    if (res.status === 401) {
+      setRenderError("Session expired or not signed in. Please sign in again.");
+      router.push(`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`);
+      return null;
+    }
     if (res.status === 403) { setRenderError("You haven’t purchased this e-book for this account."); return null; }
+    if (res.status === 404) { setRenderError("File not available for this e-book."); return null; }
     if (!res.ok) { setRenderError(`Secure PDF request failed: ${res.status}`); return null; }
 
     const buf = await res.arrayBuffer();

@@ -1,16 +1,17 @@
-// Behaviour: Interactive knowledge dashboard per README-upgrade.md. Maps course slug -> /interactive/<key> under the PWA
-// origin and passes the full URL into an interactive player iframe, with a tiny debug helper showing the resolved URL.
-// Manual test: open a knowledge course slug (e.g. ghie-business-ethics), confirm the iframe loads
-// /interactive/ghie-business-ethics/index.html, and see the debug line with the full URL.
+// Behaviour: Interactive knowledge dashboard per main app. Fetches course by slug to read interactive_path (or mapped
+// fallback) and builds an HTTPS URL (never capacitor://). Shows debug URL. Manual test: open a mapped slug and confirm
+// the iframe loads /interactive/<key>/index.html (or the stored interactive_path) and debug text shows the URL.
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 type Params = { slug: string };
 
-const interactiveMap: Record<string, string> = {
+const INTERACTIVE_MAP: Record<string, string> = {
   "ghie-business-ethics": "/interactive/ghie-business-ethics",
+  // add more mappings if interactive_path is not set in DB
 };
 
 function InteractivePlayer({ interactiveUrl }: { interactiveUrl: string }) {
@@ -30,16 +31,40 @@ function InteractivePlayer({ interactiveUrl }: { interactiveUrl: string }) {
 
 export default function KnowledgeDashboardPage() {
   const { slug } = useParams<Params>();
+  const [interactivePath, setInteractivePath] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!slug) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("courses")
+          .select("interactive_path")
+          .eq("slug", slug)
+          .maybeSingle();
+        if (!error && data?.interactive_path) {
+          setInteractivePath(data.interactive_path);
+        } else {
+          setInteractivePath(null);
+        }
+      } catch {
+        setInteractivePath(null);
+      }
+    })();
+  }, [slug]);
 
   const origin =
-    typeof window !== "undefined" && window.location ? window.location.origin : "https://kds-pwa.vercel.app";
+    process.env.NEXT_PUBLIC_PUBLIC_WEB_BASE_URL ||
+    (typeof window !== "undefined" && window.location ? window.location.origin : "https://kds-pwa.vercel.app");
 
   const interactiveUrl = useMemo(() => {
-    const path = slug && interactiveMap[slug] ? interactiveMap[slug] : null;
+    const mapped = slug && INTERACTIVE_MAP[slug] ? INTERACTIVE_MAP[slug] : null;
+    const path = interactivePath || mapped;
     if (!path) return null;
+    const isHttp = /^https?:\/\//i.test(path);
     const normalizedPath = path.endsWith(".html") ? path : `${path}/index.html`;
-    return `${origin}${normalizedPath}`;
-  }, [origin, slug]);
+    return isHttp ? normalizedPath : `${origin}${normalizedPath}`;
+  }, [origin, slug, interactivePath]);
 
   if (!slug) {
     return (
