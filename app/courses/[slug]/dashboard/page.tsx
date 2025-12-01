@@ -753,6 +753,7 @@ export default function CourseDashboard() {
     if (!activeSlide) return false;
     return completedQuizzes.includes(activeSlide.chapter_id);
   }, [completedQuizzes, activeSlide]);
+  const slideHtml = activeSlide?.body || activeSlide?.content || "";
 
   /* ========= Results modal ========= */
   const [resultOpen, setResultOpen] = useState(false);
@@ -964,10 +965,11 @@ export default function CourseDashboard() {
                 return null;
               })()}
 
-              {(activeSlide.body ?? activeSlide.content) && (
-                <div className="prose max-w-none mt-4 text-[0.95rem] leading-relaxed whitespace-pre-wrap">
-                  {activeSlide.body ?? activeSlide.content}
-                </div>
+              {slideHtml && (
+                <div
+                  className="prose max-w-none mt-4 text-[0.95rem] leading-relaxed text-[color:var(--color-text)]"
+                  dangerouslySetInnerHTML={{ __html: slideHtml }}
+                />
               )}
 
               <div className="mt-4 flex flex-wrap gap-3">
