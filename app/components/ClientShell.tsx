@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import ReadySignal from "../ReadySignal";
 import LoadingOverlay from "@/components/LoadingOverlay";
-import OfflineOverlay from "@/components/OfflineOverlay";
+import OfflineOverlay from "./OfflineOverlay";
 import { useOfflineStatus } from "@/app/hooks/useOfflineStatus";
 import { ToastHost } from "@/components/ui/toast";
 
