@@ -923,7 +923,7 @@ export default function CourseDashboard() {
         </aside>
 
         {/* Main */}
-        <main className="rounded-2xl bg-white border border-[color:var(--color-light)] p-4 pb-24 md:pb-6">
+        <main className="rounded-2xl bg-white border border-[color:var(--color-light)] p-4 pb-6 md:pb-6">
           {/* Small progress on top for mobile */}
           <div className="lg:hidden mb-3">
             <div className="flex items-center justify-between text-xs mb-1">

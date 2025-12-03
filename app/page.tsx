@@ -355,25 +355,29 @@ export default function HomePage() {
                 href={c ? `/courses/${c.slug}` : "#"}
                 className="group rounded-2xl bg-white border border-[color:var(--color-light)] hover:shadow-md transition overflow-hidden"
               >
-                <div className="relative w-full aspect-video bg-[color:var(--color-light)]/40">
-                  {c?.img ? (
-                    <Image
-                      src={safeSrc(c.img)}
-                      alt={c.title}
-                      fill
-                      sizes="(max-width:1024px) 50vw, 33vw"
-                      className="object-cover"
-                    />
-                  ) : (
-                    <Image
-                      src={safeSrc(null)}
-                      alt="Placeholder"
-                      fill
-                      sizes="(max-width:1024px) 50vw, 33vw"
-                      className="object-contain p-8"
-                    />
-                  )}
-                </div>
+              <div className="relative w-full aspect-video bg-[color:var(--color-light)]/40">
+                {c?.img ? (
+                  <Image
+                    src={safeSrc(c.img)}
+                    alt={c.title}
+                    fill
+                    priority
+                    loading="eager"
+                    sizes="(max-width:1024px) 50vw, 33vw"
+                    className="object-cover"
+                  />
+                ) : (
+                  <Image
+                    src={safeSrc(null)}
+                    alt="Placeholder"
+                    fill
+                    priority
+                    loading="eager"
+                    sizes="(max-width:1024px) 50vw, 33vw"
+                    className="object-contain p-8"
+                  />
+                )}
+              </div>
                 <div className="px-5 py-4">
                   <h3 className="font-semibold text-[17px] text-[color:var(--color-text-dark)] group-hover:opacity-90">
                     {c?.title ?? "Loading…"}
@@ -426,6 +430,8 @@ export default function HomePage() {
                         src={safeSrc(b.cover_url)}
                         alt={b.title}
                         fill
+                        priority={idx < 2}
+                        loading={idx < 2 ? "eager" : undefined}
                         sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
                         className="object-cover"
                       />
@@ -434,6 +440,8 @@ export default function HomePage() {
                         src={safeSrc(null)}
                         alt="Placeholder"
                         fill
+                        priority={idx < 2}
+                        loading={idx < 2 ? "eager" : undefined}
                         sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
                         className="object-contain p-10"
                       />

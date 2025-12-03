@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ProgressBar } from "@/components/ProgressBar";
 import SimpleCertificate from "@/components/SimpleCertificate";
 import { isNativePlatform, savePdfToDevice } from "@/lib/nativeDownload";
+import { isNativeApp } from "@/lib/nativePlatform";
 
 /* Types */
 type CourseRow = { id: string; slug: string; title: string; img: string | null; cpd_points: number | null };
@@ -261,6 +262,7 @@ export default function DashboardPage() {
   const [courseMetaMap, setCourseMetaMap] = useState<Record<string, CourseMeta>>({});
   const [certificates, setCertificates] = useState<CertificateView[]>([]);
   const [provisionalCerts, setProvisionalCerts] = useState<ProvisionalCertificate[]>([]);
+  const native = useMemo(() => isNativeApp(), []);
 
   /* Auth gate */
   useEffect(() => {
@@ -641,7 +643,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <main className="mx-auto max-w-screen-md pb-[88px]">
+      <main className={`mx-auto max-w-screen-md ${native ? "pb-2" : "pb-[88px]"}`}>
         {/* Quick Actions */}
         <div className="px-4 pt-4 grid grid-cols-3 gap-3">
           <Link href="/courses" className="rounded-xl bg-white border border-light p-3 text-center text-sm font-medium">Explore</Link>
