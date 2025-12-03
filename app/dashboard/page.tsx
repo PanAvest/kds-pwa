@@ -744,8 +744,8 @@ export default function DashboardPage() {
           )}
         </Section>
 
-        {/* 3) Course Certificates */}
-        <Section title="Course certificates">
+        {/* 3) Certificates */}
+        <Section title="Certificates">
           {loading ? (
             <div className="px-4"><div className="h-32 rounded-xl bg-white border border-light animate-pulse" /></div>
           ) : certificates.length === 0 && provisionalCerts.length === 0 ? (

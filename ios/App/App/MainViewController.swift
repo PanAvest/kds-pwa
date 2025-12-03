@@ -152,7 +152,7 @@ class MainViewController: CAPBridgeViewController {
         ])
 
         addTab(title: "Home",      imageName: "tab-home",      tag: 0)
-        addTab(title: "Courses",   imageName: "tab-programs",  tag: 1)
+        addTab(title: "Programs",  imageName: "tab-programs",  tag: 1)
         addTab(title: "E-Books",   imageName: "tab-ebooks",    tag: 2)
         addTab(title: "Dashboard", imageName: "tab-dashboard", tag: 3)
     }

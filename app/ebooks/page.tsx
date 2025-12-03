@@ -164,7 +164,7 @@ export default function Ebooks() {
                         ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
                         : "bg-[color:var(--color-light)]/60 text-muted ring-1 ring-[color:var(--color-light)]"
                     }`}>
-                      {ownedIds.has(b.id) ? "Available to read" : "Locked in iOS reader"}
+                      {ownedIds.has(b.id) ? "Available to read" : "Unlock on website"}
                     </span>
                     {!ownedIds.has(b.id) && (
                       <div className="mt-1 text-[11px] text-muted">
