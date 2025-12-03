@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
-import { isNativeIOSApp } from "@/lib/nativePlatform"
+import { isNativeApp, isNativeIOSApp } from "@/lib/nativePlatform"
 
 type Course = {
   id: string
@@ -42,6 +42,7 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [fullName, setFullName] = useState<string>("")
   const nameMissing = !fullName?.trim()
+  const isNative = useMemo(() => isNativeApp(), [])
   const isNativeIOS = useMemo(() => isNativeIOSApp(), [])
 
   useEffect(() => {
@@ -183,7 +184,7 @@ export default function HomePage() {
     <>
       {/* ===== HERO (mobile-first) ===== */}
       <section className="px-4 sm:px-6 lg:px-8 py-10 sm:py-14 lg:py-20">
-        <div className="mx-auto max-w-screen-2xl grid gap-10 lg:grid-cols-[1.08fr_.92fr] items-center">
+        <div className="mx-auto max-w-screen-2xl grid gap-10 md:grid-cols-2 lg:grid-cols-[1.08fr_.92fr] items-center">
           {/* Left copy */}
           <div>
             {/* Greeting + Auth buttons (replacing header, above KDS is powered...) */}
@@ -238,7 +239,7 @@ export default function HomePage() {
               KDS is powered by <b>PanAvest International &amp; Partners</b>
             </span>
 
-            <h1 className="mt-4 font-extrabold leading-[1.02] text-[36px] sm:text-[56px]">
+            <h1 className="mt-4 font-extrabold leading-[1.02] text-[clamp(2.25rem,4vw,3.5rem)]">
               Learn. <span style={{ color: BRAND.primary }}>Assess.</span> Excel.
             </h1>
             <p className="mt-3 sm:mt-4 text-[15px] sm:text-[17px] text-[color:var(--color-text-muted)] max-w-2xl">
@@ -298,7 +299,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {[
               {
                 Icon: Icon.Cap,
@@ -341,101 +342,34 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ===== FEATURED KNOWLEDGE ===== */}
-      <section className="py-10 sm:py-14">
-        <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between gap-4">
-            <h2 className="text-2xl sm:3xl font-bold">Featured Knowledge</h2>
-            <Link href="/courses" className="text-sm underline decoration-dotted underline-offset-4">
-              Browse all knowledge
-            </Link>
-          </div>
-
-          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {featuredList.map((c, idx) => (
-              <Link
-                key={c ? c.id : `s-${idx}`}
-                href={c ? `/courses/${c.slug}` : "#"}
-                className="group rounded-2xl bg-white border border-[color:var(--color-light)] hover:shadow-md transition overflow-hidden"
-              >
-              <div className="relative w-full aspect-video bg-[color:var(--color-light)]/40">
-                {c?.img ? (
-                  <Image
-                    src={safeSrc(c.img)}
-                    alt={c.title}
-                    fill
-                    priority
-                    loading="eager"
-                    sizes="(max-width:1024px) 50vw, 33vw"
-                    className="object-cover"
-                  />
-                ) : (
-                  <Image
-                    src={safeSrc(null)}
-                    alt="Placeholder"
-                    fill
-                    priority
-                    loading="eager"
-                    sizes="(max-width:1024px) 50vw, 33vw"
-                    className="object-contain p-8"
-                  />
-                )}
+      {!isNative && (
+        <>
+          {/* ===== FEATURED KNOWLEDGE ===== */}
+          <section className="py-10 sm:py-14">
+            <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8">
+              <div className="flex items-end justify-between gap-4">
+                <h2 className="text-2xl sm:3xl font-bold">Featured Knowledge</h2>
+                <Link href="/courses" className="text-sm underline decoration-dotted underline-offset-4">
+                  Browse all knowledge
+                </Link>
               </div>
-                <div className="px-5 py-4">
-                  <h3 className="font-semibold text-[17px] text-[color:var(--color-text-dark)] group-hover:opacity-90">
-                    {c?.title ?? "Loading…"}
-                  </h3>
-                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                    CPPD Score: <b>{c?.cpd_points ?? 0}</b>
-                  </div>
-                  {c?.description && (
-                    <p className="mt-2 text-sm text-[color:var(--color-text-muted)] line-clamp-2">
-                      {c.description}
-                    </p>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* ===== E-BOOKS ===== */}
-      <section className="bg-white py-10 sm:py-14">
-        <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-bold">E-Books</h2>
-              <p className="text-sm text-[color:var(--color-text-muted)]">
-                All books are credited by the{" "}
-                <span className="font-semibold">
-                  National Council for Curriculum and Assessment (NaCCA) of Ghana
-                </span>
-                .
-              </p>
-            </div>
-            <Link href="/ebooks" className="text-sm underline decoration-dotted underline-offset-4">
-              View all e-books
-            </Link>
-          </div>
-
-          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {ebooksList.map((b, idx) => (
-              <Link
-                key={b ? b.id : `e-${idx}`}
-                href={b ? `/ebooks/${b.slug}` : "#"}
-                className="group relative rounded-2xl ring-1 ring-[color:var(--color-light)] bg-white overflow-hidden hover:shadow-lg transition"
-              >
-                <div className="relative">
-                  <div className="relative w-full h-[280px] bg-[color:var(--color-light)]/40">
-                    {b?.cover_url ? (
+              <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {featuredList.map((c, idx) => (
+                  <Link
+                    key={c ? c.id : `s-${idx}`}
+                    href={c ? `/courses/${c.slug}` : "#"}
+                    className="group rounded-2xl bg-white border border-[color:var(--color-light)] hover:shadow-md transition overflow-hidden"
+                  >
+                  <div className="relative w-full aspect-video bg-[color:var(--color-light)]/40">
+                    {c?.img ? (
                       <Image
-                        src={safeSrc(b.cover_url)}
-                        alt={b.title}
+                        src={safeSrc(c.img)}
+                        alt={c.title}
                         fill
-                        priority={idx < 2}
-                        loading={idx < 2 ? "eager" : undefined}
-                        sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
+                        priority
+                        loading="eager"
+                        sizes="(max-width:1024px) 50vw, 33vw"
                         className="object-cover"
                       />
                     ) : (
@@ -443,52 +377,127 @@ export default function HomePage() {
                         src={safeSrc(null)}
                         alt="Placeholder"
                         fill
-                        priority={idx < 2}
-                        loading={idx < 2 ? "eager" : undefined}
-                        sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
-                        className="object-contain p-10"
+                        priority
+                        loading="eager"
+                        sizes="(max-width:1024px) 50vw, 33vw"
+                        className="object-contain p-8"
                       />
                     )}
                   </div>
-                  <div className="absolute left-3 top-3 rounded-md px-2 py-1 text-[10px] font-semibold text-white bg-black/75">
-                    NaCCA-credited
-                  </div>
-                </div>
-                <div className="p-4">
-                  <div className="min-h-[52px]">
-                    <h3 className="font-semibold leading-tight">
-                      {b?.title ?? "Loading…"}
-                    </h3>
-                  </div>
-                  {b?.description && (
-                    <p className="mt-2 text-sm text-[color:var(--color-text-muted)] line-clamp-3">
-                      {b.description}
-                    </p>
-                  )}
-                  {typeof b?.price_cents === "number" && (
-                    <div className="mt-3">
-                      <code className="rounded-md bg-[color:var(--color-light)]/40 px-2 py-1 text-[12px]">
-                        GH₵ {(b.price_cents / 100).toFixed(2)}
-                      </code>
+                    <div className="px-5 py-4">
+                      <h3 className="font-semibold text-[17px] text-[color:var(--color-text-dark)] group-hover:opacity-90">
+                        {c?.title ?? "Loading…"}
+                      </h3>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                        CPPD Score: <b>{c?.cpd_points ?? 0}</b>
+                      </div>
+                      {c?.description && (
+                        <p className="mt-2 text-sm text-[color:var(--color-text-muted)] line-clamp-2">
+                          {c.description}
+                        </p>
+                      )}
                     </div>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-[color:var(--color-text-muted)]">
-              * Accreditation and curriculum crediting provided by NaCCA (Ghana).
+      {!isNative && (
+        <>
+          {/* ===== E-BOOKS ===== */}
+          <section className="bg-white py-10 sm:py-14">
+            <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-bold">E-Books</h2>
+                  <p className="text-sm text-[color:var(--color-text-muted)]">
+                    All books are credited by the{" "}
+                    <span className="font-semibold">
+                      National Council for Curriculum and Assessment (NaCCA) of Ghana
+                    </span>
+                    .
+                  </p>
+                </div>
+                <Link href="/ebooks" className="text-sm underline decoration-dotted underline-offset-4">
+                  View all e-books
+                </Link>
+              </div>
+
+              <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {ebooksList.map((b, idx) => (
+                  <Link
+                    key={b ? b.id : `e-${idx}`}
+                    href={b ? `/ebooks/${b.slug}` : "#"}
+                    className="group relative rounded-2xl ring-1 ring-[color:var(--color-light)] bg-white overflow-hidden hover:shadow-lg transition"
+                  >
+                    <div className="relative">
+                      <div className="relative w-full h-[280px] bg-[color:var(--color-light)]/40">
+                        {b?.cover_url ? (
+                          <Image
+                            src={safeSrc(b.cover_url)}
+                            alt={b.title}
+                            fill
+                            priority={idx < 2}
+                            loading={idx < 2 ? "eager" : undefined}
+                            sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <Image
+                            src={safeSrc(null)}
+                            alt="Placeholder"
+                            fill
+                            priority={idx < 2}
+                            loading={idx < 2 ? "eager" : undefined}
+                            sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
+                            className="object-contain p-10"
+                          />
+                        )}
+                      </div>
+                      <div className="absolute left-3 top-3 rounded-md px-2 py-1 text-[10px] font-semibold text-white bg-black/75">
+                        NaCCA-credited
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <div className="min-h-[52px]">
+                        <h3 className="font-semibold leading-tight">
+                          {b?.title ?? "Loading…"}
+                        </h3>
+                      </div>
+                      {b?.description && (
+                        <p className="mt-2 text-sm text-[color:var(--color-text-muted)] line-clamp-3">
+                          {b.description}
+                        </p>
+                      )}
+                      {typeof b?.price_cents === "number" && (
+                        <div className="mt-3">
+                          <code className="rounded-md bg-[color:var(--color-light)]/40 px-2 py-1 text-[12px]">
+                            GH₵ {(b.price_cents / 100).toFixed(2)}
+                          </code>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs text-[color:var(--color-text-muted)]">
+                  * Accreditation and curriculum crediting provided by NaCCA (Ghana).
+                </div>
+                <div className="text-xs">
+                  <span className="rounded-full bg-white ring-1 ring-[color:var(--color-light)] px-3 py-1">
+                    Powered by <b>PanAvest International &amp; Partners</b>
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="text-xs">
-              <span className="rounded-full bg-white ring-1 ring-[color:var(--color-light)] px-3 py-1">
-                Powered by <b>PanAvest International &amp; Partners</b>
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+          </section>
+        </>
+      )}
 
       {/* ===== REVIEWS ===== */}
       <section className="py-10 sm:py-14">
