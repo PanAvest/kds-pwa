@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { isNativeApp } from "@/lib/nativePlatform";
 
 type Course = {
   id: string;
@@ -23,29 +24,50 @@ export default function KnowledgePage() {
   const [all, setAll] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const native = useMemo(() => isNativeApp(), []);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const { data } = await supabase
-          .from("courses")
-          .select("id,slug,title,description,img,cpd_points,published,created_at")
-          .eq("published", true)
-          .order("created_at", { ascending: false });
-        if (!alive) return;
-        setAll((data ?? []) as Course[]);
+        if (native) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!alive) return;
+          if (!user) {
+            setAll([]);
+            return;
+          }
+          const { data, error } = await supabase
+            .from("enrollments")
+            .select("course:course_id(id,slug,title,description,img,cpd_points,published,created_at)")
+            .eq("user_id", user.id);
+          if (!alive) return;
+          if (error || !data) { setAll([]); return; }
+          const mapped = (data ?? [])
+            .map((row: any) => row.course)
+            .filter(Boolean) as Course[];
+          setAll(mapped);
+        } else {
+          const { data } = await supabase
+            .from("courses")
+            .select("id,slug,title,description,img,cpd_points,published,created_at")
+            .eq("published", true)
+            .order("created_at", { ascending: false });
+          if (!alive) return;
+          setAll((data ?? []) as Course[]);
+        }
       } finally {
         if (alive) setLoading(false);
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [native]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return all;
-    return all.filter(c =>
+    const base = all;
+    if (!needle) return base;
+    return base.filter(c =>
       (c.title?.toLowerCase().includes(needle)) ||
       (c.description?.toLowerCase().includes(needle)) ||
       (c.slug?.toLowerCase().includes(needle))
@@ -74,6 +96,15 @@ export default function KnowledgePage() {
           />
         </div>
       </header>
+
+      {native && !loading && filtered.length === 0 && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-5 text-amber-900">
+          <div className="font-semibold">No programs are available in this mobile app yet.</div>
+          <p className="mt-1 text-sm">
+            Enroll in PanAvest KDS programs on www.panavestkds.com, then sign in here to continue learning.
+          </p>
+        </div>
+      )}
 
       <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((c, idx) => (

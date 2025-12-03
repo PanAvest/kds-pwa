@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
-import { isNativeIOSApp } from "@/lib/nativePlatform";
+import { isNativeApp, isNativeIOSApp } from "@/lib/nativePlatform";
 import { supabase } from "@/lib/supabaseClient";
 
 type Ebook = {
@@ -22,6 +22,7 @@ export default function Ebooks() {
   const router = useRouter();
   const sp = useSearchParams();
   const qParam = sp.get("q") ?? "";
+  const native = useMemo(() => isNativeApp(), []);
   const isIOS = useMemo(() => isNativeIOSApp(), []);
   const { isOffline, markOffline, markOnline } = useOfflineMonitor();
 
@@ -73,12 +74,18 @@ export default function Ebooks() {
     })();
   }, [qParam, markOffline, markOnline]);
 
+  const filteredItems = useMemo(() => {
+    if (!items) return null;
+    const list = native ? items.filter((b) => ownedIds.has(b.id)) : items;
+    return list;
+  }, [items, native, ownedIds]);
+
   const headerNote = useMemo(() => {
     if (loading) return "Searching…";
-    if (items && qParam) return `${items.length} result${items.length === 1 ? "" : "s"} for “${qParam}”`;
-    if (items) return `${items.length} title${items.length === 1 ? "" : "s"}`;
+    if (filteredItems && qParam) return `${filteredItems.length} result${filteredItems.length === 1 ? "" : "s"} for “${qParam}”`;
+    if (filteredItems) return `${filteredItems.length} title${filteredItems.length === 1 ? "" : "s"}`;
     return "";
-  }, [items, loading, qParam]);
+  }, [filteredItems, loading, qParam]);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -126,9 +133,9 @@ export default function Ebooks() {
         </div>
       )}
 
-      {items && (
+      {filteredItems && (
         <div className="mt-6 grid gap-4 grid-cols-2 sm:grid-cols-3">
-          {items.map((b) => (
+          {filteredItems.map((b) => (
             <Link
               key={b.id}
               href={`/ebooks/${encodeURIComponent(b.slug)}`}
@@ -157,22 +164,7 @@ export default function Ebooks() {
                 <p className="mt-1 text-xs text-muted line-clamp-2">
                   {b.description ?? "No description yet."}
                 </p>
-                {isIOS ? (
-                  <div className="mt-auto pt-2 text-xs">
-                    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${
-                      ownedIds.has(b.id)
-                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                        : "bg-[color:var(--color-light)]/60 text-muted ring-1 ring-[color:var(--color-light)]"
-                    }`}>
-                      {ownedIds.has(b.id) ? "Available to read" : "Unlock on website"}
-                    </span>
-                    {!ownedIds.has(b.id) && (
-                      <div className="mt-1 text-[11px] text-muted">
-                        Manage access on your KDS web portal.
-                      </div>
-                    )}
-                  </div>
-                ) : (
+                {native ? null : (
                   <div className="mt-auto pt-2 text-sm font-medium">
                     GH₵ {(b.price_cents / 100).toFixed(2)}
                   </div>
@@ -180,9 +172,17 @@ export default function Ebooks() {
               </div>
             </Link>
           ))}
-          {!loading && items.length === 0 && (
+          {!loading && filteredItems.length === 0 && (
             <div className="text-sm text-muted mt-6">No books found.</div>
           )}
+        </div>
+      )}
+      {native && filteredItems && filteredItems.length === 0 && !loading && (
+        <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-5 text-amber-900">
+          <div className="font-semibold">No e-books are available in this mobile app yet.</div>
+          <p className="mt-1 text-sm">
+            Add e-books to your PanAvest KDS account on www.panavestkds.com, then sign in here to read them.
+          </p>
         </div>
       )}
     </main>

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import * as pdfjs from "pdfjs-dist";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
-import { isNativeIOSApp } from "@/lib/nativePlatform";
+import { isNativeApp } from "@/lib/nativePlatform";
 import { supabase } from "@/lib/supabaseClient";
 
 /** ── Minimal PDF.js typings ──────────────────────────────────────── */
@@ -55,7 +55,7 @@ export default function EbookDetailPage() {
   const search = useSearchParams();
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
-  const isIOS = useMemo(() => isNativeIOSApp(), []);
+  const isNative = useMemo(() => isNativeApp(), []);
   const { isOffline, markOffline, markOnline } = useOfflineMonitor();
 
   const [ebook, setEbook] = useState<Ebook | null>(null);
@@ -233,27 +233,23 @@ export default function EbookDetailPage() {
     if (!Number.isFinite(numeric)) return "GH₵ 0.00";
     return `GH₵ ${(numeric / 100).toFixed(2)}`;
   }, [ebook]);
-  const iosAccessRequired = (
-    <div className="space-y-2 text-sm text-muted">
-      <div className="text-base font-semibold text-ink">Access Required</div>
-      <p>
-        This mobile app is a companion viewer for the PanAvest KDS platform. New purchases and payments are managed on the web.
-      </p>
-      <p>
-        If you already have access to this e-book, please sign in with your PanAvest KDS account.
-      </p>
-      <p className="text-xs text-[color:var(--color-text-muted)]">Manage purchases at www.panavestkds.com.</p>
-    </div>
-  );
   const iosHasAccess = (
     <div className="text-sm text-muted">
       You already have access to this material. Tap below to open it.
     </div>
   );
+  const nativeNotAvailable = (
+    <div className="space-y-2 text-sm text-muted">
+      <div className="text-base font-semibold text-ink">Not available in mobile viewer</div>
+      <p>
+        This e-book is not available in the PanAvest KDS mobile app for this account. To manage your e-book library, please use the web portal at <span className="font-semibold">www.panavestkds.com</span>.
+      </p>
+    </div>
+  );
 
   /** Start Paystack */
   async function handleBuy() {
-    if (isIOS) {
+    if (isNative) {
       setErr("Purchases are managed on the KDS web portal.");
       return;
     }
@@ -477,11 +473,15 @@ export default function EbookDetailPage() {
 
             <div className="rounded-2xl bg-white border border-light p-4">
               <h1 className="text-2xl font-bold">{ebook.title}</h1>
-              <div className="mt-2 text-sm text-muted">Price</div>
-              <div className="text-xl font-semibold">{price}</div>
-              {isIOS && own.kind !== "owner" && (
+              {!isNative && (
+                <>
+                  <div className="mt-2 text-sm text-muted">Price</div>
+                  <div className="text-xl font-semibold">{price}</div>
+                </>
+              )}
+              {isNative && own.kind !== "owner" && (
                 <div className="mt-2 rounded-md bg-[color:var(--color-light)]/60 text-xs text-muted px-3 py-2 space-y-1">
-                  {iosAccessRequired}
+                  {nativeNotAvailable}
                 </div>
               )}
 
@@ -495,16 +495,16 @@ export default function EbookDetailPage() {
                 )}
 
                 {own.kind === "signed_out" && (
-                  isIOS ? (
-                    <>
-                      {iosAccessRequired}
+                  isNative ? (
+                    <div className="space-y-2 text-sm text-muted">
+                      {nativeNotAvailable}
                       <Link
                         href={`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`}
                         className="inline-flex items-center justify-center rounded-lg bg-brand text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
                       >
-                        Sign in to access
+                        Sign in
                       </Link>
-                    </>
+                    </div>
                   ) : (
                     <>
                       <Link
@@ -524,12 +524,16 @@ export default function EbookDetailPage() {
                 )}
 
                 {own.kind === "not_owner" && (
-                  isIOS ? (
-                    <>
-                      <div className="rounded-md bg-[color:var(--color-light)]/60 px-4 py-3 text-sm text-muted space-y-1">
-                        {iosAccessRequired}
-                      </div>
-                    </>
+                  isNative ? (
+                    <div className="rounded-md bg-[color:var(--color-light)]/60 px-4 py-3 text-sm text-muted space-y-2">
+                      {nativeNotAvailable}
+                      <Link
+                        href="/ebooks"
+                        className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 ring-1 ring-[color:var(--color-light)] hover:bg-[color:var(--color-light)]/50 w-full sm:w-auto"
+                      >
+                        Back to e-books
+                      </Link>
+                    </div>
                   ) : (
                     <>
                       <button
@@ -552,7 +556,7 @@ export default function EbookDetailPage() {
 
                 {own.kind === "owner" && (
                   <>
-                    {isIOS && iosHasAccess}
+                    {isNative && iosHasAccess}
                     <button
                       onClick={openReader}
                       className="rounded-lg text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
@@ -572,8 +576,8 @@ export default function EbookDetailPage() {
 
               {own.kind !== "owner" && (
                 <p className="mt-3 text-xs text-muted">
-                  {isIOS
-                    ? "This iOS app is for existing KDS learners. Sign in to view items already on your account."
+                  {isNative
+                    ? "This mobile app is for existing PanAvest KDS accounts. Sign in to view items already on your account."
                     : "Sign in and purchase to unlock reading."}
                 </p>
               )}
@@ -589,8 +593,8 @@ export default function EbookDetailPage() {
                 <div className="text-center px-6">
                   <div className="text-lg font-semibold">Access locked</div>
                   <p className="text-sm text-muted mt-1">
-                    {isIOS
-                    ? "This e-book is not available in your PanAvest KDS account on this device. Please use the PanAvest KDS web portal (www.panavestkds.com) or contact your administrator to manage access. This mobile app is for existing PanAvest KDS learners."
+                    {isNative
+                    ? "This e-book is not available in the PanAvest KDS mobile app for this account. Please use www.panavestkds.com to manage access."
                       : own.kind === "signed_out"
                         ? "Sign in and purchase to read the full e-book."
                         : "Purchase to read the full e-book."}

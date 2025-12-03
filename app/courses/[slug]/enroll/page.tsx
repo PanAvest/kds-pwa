@@ -2,8 +2,9 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { isNativeIOSApp } from "@/lib/nativePlatform";
+import { isNativeApp } from "@/lib/nativePlatform";
 import { supabase } from "@/lib/supabaseClient";
 
 type CourseRow = {
@@ -35,19 +36,7 @@ export default function EnrollPage() {
   const [course, setCourse] = React.useState<Course | null>(null);
   const [notice, setNotice] = React.useState<string>("");
   const [enrollmentStatus, setEnrollmentStatus] = React.useState<"unknown" | "enrolled" | "not_enrolled">("unknown");
-  const isIOS = React.useMemo(() => isNativeIOSApp(), []);
-  const iosAccessRequired = (
-    <div className="space-y-2 text-sm text-muted">
-      <div className="text-base font-semibold text-ink">Access Required</div>
-      <p>
-        This mobile app is a companion viewer for the PanAvest KDS platform. New enrollments and payments are managed on the web.
-      </p>
-      <p>
-        If you already have access to this program, please sign in with your PanAvest KDS account.
-      </p>
-      <p className="text-xs text-[color:var(--color-text-muted)]">Manage purchases at www.panavestkds.com.</p>
-    </div>
-  );
+  const isNative = React.useMemo(() => isNativeApp(), []);
 
   // Require auth
   React.useEffect(() => {
@@ -141,7 +130,7 @@ export default function EnrollPage() {
   }, []);
 
   async function payNow() {
-    if (isIOS) {
+    if (isNative) {
       setNotice("This mobile app is for accessing materials already on your KDS Learning account. New items are added via the KDS Learning website.");
       return;
     }
@@ -203,19 +192,32 @@ export default function EnrollPage() {
       </p>
 
       <div className="mt-6 rounded-2xl bg-white border border-[color:var(--color-light)] p-5">
-        <div className="text-lg font-semibold">
-          Total: {course.currency} {(course.price_cents / 100).toFixed(2)}
-        </div>
-        {isIOS ? (
-          <div className="mt-3">{iosAccessRequired}</div>
+        {isNative ? (
+          <div className="space-y-2 text-sm text-muted">
+            <div className="text-base font-semibold text-ink">Mobile viewer notice</div>
+            <p>
+              Enrollments for PanAvest KDS programs are handled on the web portal at www.panavestkds.com. This mobile app is for viewing programs already on your account.
+            </p>
+            <Link
+              href="/courses"
+              className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 ring-1 ring-[color:var(--color-light)] hover:bg-[color:var(--color-light)]/50"
+            >
+              Back to Programs
+            </Link>
+          </div>
         ) : (
-          <button
-            type="button"
-            onClick={payNow}
-            className="mt-4 rounded-lg bg-[color:#b65437] text-white px-5 py-2 font-semibold hover:opacity-90"
-          >
-            Pay with Paystack
-          </button>
+          <>
+            <div className="text-lg font-semibold">
+              Total: {course.currency} {(course.price_cents / 100).toFixed(2)}
+            </div>
+            <button
+              type="button"
+              onClick={payNow}
+              className="mt-4 rounded-lg bg-[color:#b65437] text-white px-5 py-2 font-semibold hover:opacity-90"
+            >
+              Pay with Paystack
+            </button>
+          </>
         )}
         {!!notice && <div className="mt-3 text-sm">{notice}</div>}
       </div>

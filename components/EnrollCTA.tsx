@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { isNativeIOSApp } from "@/lib/nativePlatform";
+import { isNativeApp } from "@/lib/nativePlatform";
 import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
@@ -21,8 +21,8 @@ type EnrollState =
 
 export default function EnrollCTA({ courseId, slug, className, readerMode }: Props) {
   const [state, setState] = useState<EnrollState>({ kind: "loading" });
-  const isReaderMode = useMemo(
-    () => readerMode ?? isNativeIOSApp(),
+  const isViewerMode = useMemo(
+    () => (typeof readerMode === "boolean" ? readerMode : isNativeApp()),
     [readerMode]
   );
   const iosAccessRequired = (
@@ -73,7 +73,7 @@ export default function EnrollCTA({ courseId, slug, className, readerMode }: Pro
   }
 
   if (state.kind === "signed_out") {
-    if (isReaderMode) {
+    if (isViewerMode) {
       return (
         <div className={`space-y-2 ${className || ""}`}>
           {iosAccessRequired}
@@ -97,7 +97,7 @@ export default function EnrollCTA({ courseId, slug, className, readerMode }: Pro
   }
 
   if (state.kind === "enrolled") {
-    if (isReaderMode) {
+    if (isViewerMode) {
       return (
         <div className={`space-y-2 ${className || ""}`}>
           {iosHasAccess}
@@ -105,7 +105,7 @@ export default function EnrollCTA({ courseId, slug, className, readerMode }: Pro
             href={`/courses/${slug}/dashboard`}
             className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 ring-1 ring-[color:var(--color-light)] hover:bg-[color:var(--color-light)]/50"
           >
-            Go to Dashboard
+            Open program
           </Link>
         </div>
       );
@@ -120,7 +120,7 @@ export default function EnrollCTA({ courseId, slug, className, readerMode }: Pro
     );
   }
 
-  if (isReaderMode) {
+  if (isViewerMode) {
     return (
       <div className={`space-y-2 ${className || ""}`}>
         {iosAccessRequired}
