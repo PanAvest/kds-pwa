@@ -110,7 +110,7 @@ class MainViewController: CAPBridgeViewController {
         let safe = view.safeAreaLayoutGuide
 
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
-        bottomBar.backgroundColor = .white
+        bottomBar.backgroundColor = .systemBackground
         bottomBar.clipsToBounds = true   // prevent icons bleeding out of the bar
 
         view.addSubview(bottomBar)
@@ -118,7 +118,7 @@ class MainViewController: CAPBridgeViewController {
         NSLayoutConstraint.activate([
             bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bottomBar.bottomAnchor.constraint(equalTo: safe.bottomAnchor),
+            bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             bottomBar.heightAnchor.constraint(equalToConstant: bottomBarHeight)
         ])
 
@@ -314,7 +314,9 @@ class MainViewController: CAPBridgeViewController {
         view.bringSubviewToFront(bottomBar)
         view.bringSubviewToFront(loadingOverlay)
 
-        let bottomInset: CGFloat = bottomBarHeight + view.safeAreaInsets.bottom
+        let safeBottom: CGFloat = view.safeAreaInsets.bottom
+        let extraPadding: CGFloat = 4.0
+        let bottomInset = safeBottom + extraPadding
         let inset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
 
         webView.scrollView.contentInset = inset

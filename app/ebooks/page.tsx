@@ -96,7 +96,7 @@ export default function Ebooks() {
           <h1 className="text-2xl sm:text-3xl font-bold">E-Books</h1>
           <p className="mt-1 text-muted max-w-2xl text-sm sm:text-base">
             {isIOS
-              ? "This iOS app is a companion reader for existing KDS learners. Manage purchases on the KDS web portal; sign in here to open items already on your account."
+              ? "This mobile app is a companion reader for the PanAvest KDS platform. Manage purchases on the web portal at www.panavestkds.com; sign in here to open items already on your account."
               : "Buy to unlock reading. Your purchases appear in the Dashboard."}
           </p>
         </div>

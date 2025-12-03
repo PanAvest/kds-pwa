@@ -29,11 +29,12 @@ export default function EnrollCTA({ courseId, slug, className, readerMode }: Pro
     <div className="space-y-2 text-sm text-muted">
       <div className="text-base font-semibold text-ink">Access Required</div>
       <p>
-        This iOS app is a companion viewer for KDS learners. New enrollments and payments are managed outside this app.
+        This mobile app is a companion viewer for the PanAvest KDS platform. New enrollments and payments are managed on the web.
       </p>
       <p>
-        If you already have access to this course, please sign in with your KDS account.
+        If you already have access to this program, please sign in with your PanAvest KDS account.
       </p>
+      <p className="text-xs text-[color:var(--color-text-muted)]">Manage purchases at www.panavestkds.com.</p>
     </div>
   );
   const iosHasAccess = (

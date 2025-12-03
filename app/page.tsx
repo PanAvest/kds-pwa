@@ -247,8 +247,11 @@ export default function HomePage() {
             </p>
 
             {isNativeIOS && (
-              <div className="mt-4 rounded-xl bg-[color:var(--color-light)]/60 px-4 py-3 text-sm text-[color:var(--color-text-muted)]">
-                This iOS app is a companion viewer for existing KDS learners. Sign in to access courses and e-books already on your account. New enrollments and payments are handled on the KDS web portal.
+              <div className="mt-4 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-[0_8px_24px_-16px_rgba(0,0,0,0.25)]">
+                <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">PanAvest KDS mobile access</div>
+                <p className="mt-1 leading-relaxed">
+                  This mobile app is a companion viewer for the PanAvest KDS platform. Sign in to access programs, knowledge modules, certificates, and e-books already on your account. New enrollments and payments are completed on the web portal at <span className="font-semibold">www.panavestkds.com</span>.
+                </p>
               </div>
             )}
 

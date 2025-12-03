@@ -237,11 +237,12 @@ export default function EbookDetailPage() {
     <div className="space-y-2 text-sm text-muted">
       <div className="text-base font-semibold text-ink">Access Required</div>
       <p>
-        This iOS app is a companion viewer for KDS learners. New purchases and payments are managed outside this app.
+        This mobile app is a companion viewer for the PanAvest KDS platform. New purchases and payments are managed on the web.
       </p>
       <p>
-        If you already have access to this e-book, please sign in with your KDS account.
+        If you already have access to this e-book, please sign in with your PanAvest KDS account.
       </p>
+      <p className="text-xs text-[color:var(--color-text-muted)]">Manage purchases at www.panavestkds.com.</p>
     </div>
   );
   const iosHasAccess = (
@@ -589,7 +590,7 @@ export default function EbookDetailPage() {
                   <div className="text-lg font-semibold">Access locked</div>
                   <p className="text-sm text-muted mt-1">
                     {isIOS
-                      ? "This e-book is not available in your KDS account on this device. Please use your KDS web portal or contact your KDS administrator to manage access. This iOS app is for existing KDS learners."
+                    ? "This e-book is not available in your PanAvest KDS account on this device. Please use the PanAvest KDS web portal (www.panavestkds.com) or contact your administrator to manage access. This mobile app is for existing PanAvest KDS learners."
                       : own.kind === "signed_out"
                         ? "Sign in and purchase to read the full e-book."
                         : "Purchase to read the full e-book."}
