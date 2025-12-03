@@ -3,13 +3,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { isIOSApp } from "@/lib/platform";
+import { isNativeIOSApp } from "@/lib/nativePlatform";
 import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
   courseId: string;
   slug: string;
   className?: string;
+  readerMode?: boolean;
 };
 
 type EnrollState =
@@ -18,20 +19,20 @@ type EnrollState =
   | { kind: "enrolled" }
   | { kind: "not_enrolled" };
 
-export default function EnrollCTA({ courseId, slug, className }: Props) {
+export default function EnrollCTA({ courseId, slug, className, readerMode }: Props) {
   const [state, setState] = useState<EnrollState>({ kind: "loading" });
-  const isIOS = useMemo(() => isIOSApp(), []);
+  const isReaderMode = useMemo(
+    () => readerMode ?? isNativeIOSApp(),
+    [readerMode]
+  );
   const iosAccessRequired = (
     <div className="space-y-2 text-sm text-muted">
       <div className="text-base font-semibold text-ink">Access Required</div>
       <p>
-        This mobile app allows you to sign in and use any books or knowledge materials that are already part of your KDS Learning account.
+        This iOS app is a companion viewer for KDS learners. New enrollments and payments are managed outside this app.
       </p>
       <p>
-        To unlock this item, please ensure it has been added to your account on the KDS Learning website: www.panavestkds.com.
-      </p>
-      <p>
-        If it is already available on your account, simply sign in with the same details here and it will appear automatically.
+        If you already have access to this course, please sign in with your KDS account.
       </p>
     </div>
   );
@@ -71,7 +72,7 @@ export default function EnrollCTA({ courseId, slug, className }: Props) {
   }
 
   if (state.kind === "signed_out") {
-    if (isIOS) {
+    if (isReaderMode) {
       return (
         <div className={`space-y-2 ${className || ""}`}>
           {iosAccessRequired}
@@ -95,7 +96,7 @@ export default function EnrollCTA({ courseId, slug, className }: Props) {
   }
 
   if (state.kind === "enrolled") {
-    if (isIOS) {
+    if (isReaderMode) {
       return (
         <div className={`space-y-2 ${className || ""}`}>
           {iosHasAccess}
@@ -118,7 +119,7 @@ export default function EnrollCTA({ courseId, slug, className }: Props) {
     );
   }
 
-  if (isIOS) {
+  if (isReaderMode) {
     return (
       <div className={`space-y-2 ${className || ""}`}>
         {iosAccessRequired}

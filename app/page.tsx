@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
+import { isNativeIOSApp } from "@/lib/nativePlatform"
 
 type Course = {
   id: string
@@ -41,6 +42,7 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [fullName, setFullName] = useState<string>("")
   const nameMissing = !fullName?.trim()
+  const isNativeIOS = useMemo(() => isNativeIOSApp(), [])
 
   useEffect(() => {
     let alive = true
@@ -243,6 +245,12 @@ export default function HomePage() {
               Certified CPD (CPPD) pathways for modern professionals — industry-aligned modules, interactive
               assessments, and verifiable certificates.
             </p>
+
+            {isNativeIOS && (
+              <div className="mt-4 rounded-xl bg-[color:var(--color-light)]/60 px-4 py-3 text-sm text-[color:var(--color-text-muted)]">
+                This iOS app is a companion viewer for existing KDS learners. Sign in to access courses and e-books already on your account. New enrollments and payments are handled on the KDS web portal.
+              </div>
+            )}
 
             {/* CTA buttons removed as requested */}
 

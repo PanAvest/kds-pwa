@@ -31,7 +31,7 @@ class MainViewController: CAPBridgeViewController {
     private var hasSentNativeReadyEvent = false
     private let webReadyMessageHandlerName = "kdsWebReady"
 
-    // 0 = Home, 1 = Programs, 2 = E-Books, 3 = Dashboard
+    // 0 = Home, 1 = Courses, 2 = E-Books, 3 = Dashboard
     private var currentTab: Int = 0
 
     // Brand colors (match CSS)
@@ -41,6 +41,7 @@ class MainViewController: CAPBridgeViewController {
     private let softBorder = UIColor(red: 0xD0/255.0, green: 0xC5/255.0, blue: 0xBE/255.0, alpha: 1.0)
 
     private let bottomBarHeight: CGFloat = 100.0
+    private var hasLoadedInitialPath = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -62,6 +63,7 @@ class MainViewController: CAPBridgeViewController {
         updateTabSelection()
         applyInsetsToWebView()
         injectViewportAndSelectionJS()
+        loadInitialPathIfNeeded()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -105,6 +107,8 @@ class MainViewController: CAPBridgeViewController {
     // MARK: - Bottom Nav
 
     private func setupBottomBar() {
+        let safe = view.safeAreaLayoutGuide
+
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.backgroundColor = .white
         bottomBar.clipsToBounds = true   // prevent icons bleeding out of the bar
@@ -114,7 +118,7 @@ class MainViewController: CAPBridgeViewController {
         NSLayoutConstraint.activate([
             bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            bottomBar.bottomAnchor.constraint(equalTo: safe.bottomAnchor),
             bottomBar.heightAnchor.constraint(equalToConstant: bottomBarHeight)
         ])
 
@@ -148,7 +152,7 @@ class MainViewController: CAPBridgeViewController {
         ])
 
         addTab(title: "Home",      imageName: "tab-home",      tag: 0)
-        addTab(title: "Programs",  imageName: "tab-programs",  tag: 1)
+        addTab(title: "Courses",   imageName: "tab-programs",  tag: 1)
         addTab(title: "E-Books",   imageName: "tab-ebooks",    tag: 2)
         addTab(title: "Dashboard", imageName: "tab-dashboard", tag: 3)
     }
@@ -218,23 +222,48 @@ class MainViewController: CAPBridgeViewController {
         }
     }
 
+    private func path(forTab tag: Int) -> String {
+        switch tag {
+        case 0: return "/"          // Home
+        case 1: return "/courses"   // Courses
+        case 2: return "/ebooks"    // E-Books
+        case 3: return "/dashboard" // Dashboard
+        default: return "/"
+        }
+    }
+
+    /// Navigate within the existing WKWebView to the provided path on the configured server.
+    private func loadPath(_ path: String) {
+        guard let webView = bridge?.webView as? WKWebView else { return }
+        guard let baseURL = bridge?.config.serverURL else { return }
+
+        let normalizedPath = path.hasPrefix("/") ? path : "/\(path)"
+        let trimmedPathComponent = String(normalizedPath.drop(while: { $0 == "/" }))
+        let destinationURL = baseURL.appendingPathComponent(trimmedPathComponent)
+        let request = URLRequest(url: destinationURL)
+
+        // Prefer in-app JS navigation to avoid recreating the webview.
+        let js = "window.location.href = '\(normalizedPath)'"
+        webView.evaluateJavaScript(js) { [weak webView] _, error in
+            if error != nil {
+                webView?.load(request)
+            }
+        }
+    }
+
+    private func loadInitialPathIfNeeded() {
+        guard !hasLoadedInitialPath else { return }
+        hasLoadedInitialPath = true
+        loadPath("/")
+    }
+
     @objc private func tabTapped(_ sender: UIControl) {
         currentTab = sender.tag
         updateTabSelection()
         showLoadingOverlay()  // show immediately on tab tap
 
-        let path: String
-        switch sender.tag {
-        case 0: path = "/"          // Home
-        case 1: path = "/courses"   // Programs
-        case 2: path = "/ebooks"    // E-Books
-        case 3: path = "/dashboard" // Dashboard
-        default: path = "/"
-        }
-
-        let js = "window.location.href = '\(path)';"
-        bridge?.webView?.evaluateJavaScript(js, completionHandler: nil)
-        // Hiding is handled by webView progress observer now
+        let path = path(forTab: sender.tag)
+        loadPath(path)
     }
 
     // MARK: - Loading overlay
@@ -360,6 +389,10 @@ class MainViewController: CAPBridgeViewController {
         bridge?.webView?.evaluateJavaScript("window.dispatchEvent(new Event('kdsWebReady'))", completionHandler: nil)
     }
 
+    private func notifyOffline() {
+        bridge?.webView?.evaluateJavaScript("window.dispatchEvent(new Event('capacitorOffline'))", completionHandler: nil)
+    }
+
     // MARK: - Observe WKWebView progress to show/hide loader for ALL navigations
 
     private func setupWebViewProgressObserver() {
@@ -462,10 +495,12 @@ extension MainViewController: WKNavigationDelegate, WKScriptMessageHandler, WKUI
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         originalNavigationDelegate?.webView?(webView, didFail: navigation, withError: error)
+        notifyOffline()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         originalNavigationDelegate?.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
+        notifyOffline()
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {

@@ -5,6 +5,9 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
@@ -53,6 +56,21 @@ public class MainActivity extends BridgeActivity {
                 if (url != null && !"about:blank".equals(url)) {
                     runOnUiThread(() -> hideNativeSplash());
                 }
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request == null || !request.isForMainFrame()) return;
+                view.evaluateJavascript("window.dispatchEvent(new Event('capacitorOffline'));", null);
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request == null || !request.isForMainFrame()) return;
+                // Signal offline/failed load to the web layer
+                view.evaluateJavascript("window.dispatchEvent(new Event('capacitorOffline'));", null);
             }
         });
     }

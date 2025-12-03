@@ -1,9 +1,7 @@
 // app/layout.tsx
 import "./globals.css"
 import type { Metadata } from "next"
-import { ToastHost } from "@/components/ui/toast"
-import LoadingOverlay from "@/components/LoadingOverlay"
-import ReadySignal from "./ReadySignal"
+import ClientShell from "./components/ClientShell"
 import { Analytics } from "@vercel/analytics/next"
 
 export const metadata: Metadata = {
@@ -26,17 +24,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       {/* no-copy keeps whole app non-selectable / non-copyable (set in globals.css) */}
       <body className="bg-[var(--color-bg)] no-copy">
-        <ReadySignal />
-        {/* GLOBAL LOADING FADE, like MainViewController.swift */}
-        <LoadingOverlay />
-
-        {/* Main content; mobile app will be inside native header + bottom bar */}
-        <main className="min-h-[100dvh] pb-4">
+        <ClientShell>
           {children}
-        </main>
-
+        </ClientShell>
         <Analytics />
-        <ToastHost />
       </body>
     </html>
   )

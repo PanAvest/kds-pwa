@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
-import { isIOSApp } from "@/lib/platform";
+import { isNativeIOSApp } from "@/lib/nativePlatform";
+import { supabase } from "@/lib/supabaseClient";
 
 type Ebook = {
   id: string;
@@ -21,16 +22,36 @@ export default function Ebooks() {
   const router = useRouter();
   const sp = useSearchParams();
   const qParam = sp.get("q") ?? "";
-  const isIOS = useMemo(() => isIOSApp(), []);
+  const isIOS = useMemo(() => isNativeIOSApp(), []);
   const { isOffline, markOffline, markOnline } = useOfflineMonitor();
 
   const [q, setQ] = useState(qParam);
   const [items, setItems] = useState<Ebook[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
 
   // Keep input synced when user goes back
   useEffect(() => setQ(qParam), [qParam]);
+
+  // Load owned ebooks to mark availability in reader mode
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!active) return;
+      if (!user) { setOwnedIds(new Set()); return; }
+      const { data, error } = await supabase
+        .from("ebook_purchases")
+        .select("ebook_id, status")
+        .eq("user_id", user.id)
+        .eq("status", "paid");
+      if (!active) return;
+      if (error || !data) { setOwnedIds(new Set()); return; }
+      setOwnedIds(new Set(data.map((row) => row.ebook_id)));
+    })();
+    return () => { active = false; };
+  }, []);
 
   // Fetch list whenever the URL (?q=) changes
   useEffect(() => {
@@ -75,7 +96,7 @@ export default function Ebooks() {
           <h1 className="text-2xl sm:text-3xl font-bold">E-Books</h1>
           <p className="mt-1 text-muted max-w-2xl text-sm sm:text-base">
             {isIOS
-              ? "Access Required — This mobile app allows you to sign in and use any books or knowledge materials that are already part of your KDS Learning account. To unlock new items, please ensure they have been added on www.panavestkds.com. Sign in here with the same details to see them automatically."
+              ? "This iOS app is a companion reader for existing KDS learners. Manage purchases on the KDS web portal; sign in here to open items already on your account."
               : "Buy to unlock reading. Your purchases appear in the Dashboard."}
           </p>
         </div>
@@ -136,9 +157,26 @@ export default function Ebooks() {
                 <p className="mt-1 text-xs text-muted line-clamp-2">
                   {b.description ?? "No description yet."}
                 </p>
-                <div className="mt-auto pt-2 text-sm font-medium">
-                  GH₵ {(b.price_cents / 100).toFixed(2)}
-                </div>
+                {isIOS ? (
+                  <div className="mt-auto pt-2 text-xs">
+                    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${
+                      ownedIds.has(b.id)
+                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                        : "bg-[color:var(--color-light)]/60 text-muted ring-1 ring-[color:var(--color-light)]"
+                    }`}>
+                      {ownedIds.has(b.id) ? "Available to read" : "Locked in iOS reader"}
+                    </span>
+                    {!ownedIds.has(b.id) && (
+                      <div className="mt-1 text-[11px] text-muted">
+                        Manage access on your KDS web portal.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-auto pt-2 text-sm font-medium">
+                    GH₵ {(b.price_cents / 100).toFixed(2)}
+                  </div>
+                )}
               </div>
             </Link>
           ))}

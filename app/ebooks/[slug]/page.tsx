@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import * as pdfjs from "pdfjs-dist";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
-import { isIOSApp } from "@/lib/platform";
+import { isNativeIOSApp } from "@/lib/nativePlatform";
 import { supabase } from "@/lib/supabaseClient";
 
 /** ── Minimal PDF.js typings ──────────────────────────────────────── */
@@ -55,7 +55,7 @@ export default function EbookDetailPage() {
   const search = useSearchParams();
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
-  const isIOS = useMemo(() => isIOSApp(), []);
+  const isIOS = useMemo(() => isNativeIOSApp(), []);
   const { isOffline, markOffline, markOnline } = useOfflineMonitor();
 
   const [ebook, setEbook] = useState<Ebook | null>(null);
@@ -237,13 +237,10 @@ export default function EbookDetailPage() {
     <div className="space-y-2 text-sm text-muted">
       <div className="text-base font-semibold text-ink">Access Required</div>
       <p>
-        This mobile app allows you to sign in and use any books or knowledge materials that are already part of your KDS Learning account.
+        This iOS app is a companion viewer for KDS learners. New purchases and payments are managed outside this app.
       </p>
       <p>
-        To unlock this item, please ensure it has been added to your account on the KDS Learning website: www.panavestkds.com.
-      </p>
-      <p>
-        If it is already available on your account, simply sign in with the same details here and it will appear automatically.
+        If you already have access to this e-book, please sign in with your KDS account.
       </p>
     </div>
   );
@@ -256,7 +253,7 @@ export default function EbookDetailPage() {
   /** Start Paystack */
   async function handleBuy() {
     if (isIOS) {
-      setErr("Access Required");
+      setErr("Purchases are managed on the KDS web portal.");
       return;
     }
     const { data: { user } } = await supabase.auth.getUser();
@@ -575,7 +572,7 @@ export default function EbookDetailPage() {
               {own.kind !== "owner" && (
                 <p className="mt-3 text-xs text-muted">
                   {isIOS
-                    ? "If it is already on your KDS Learning account, sign in with the same details to read."
+                    ? "This iOS app is for existing KDS learners. Sign in to view items already on your account."
                     : "Sign in and purchase to unlock reading."}
                 </p>
               )}
@@ -592,7 +589,7 @@ export default function EbookDetailPage() {
                   <div className="text-lg font-semibold">Access locked</div>
                   <p className="text-sm text-muted mt-1">
                     {isIOS
-                      ? "Access Required — make sure this e-book is on your KDS Learning account at www.panavestkds.com. If it already is, sign in here with the same details to open it."
+                      ? "This e-book is not available in your KDS account on this device. Please use your KDS web portal or contact your KDS administrator to manage access. This iOS app is for existing KDS learners."
                       : own.kind === "signed_out"
                         ? "Sign in and purchase to read the full e-book."
                         : "Purchase to read the full e-book."}

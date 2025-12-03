@@ -3,7 +3,7 @@
 
 import React from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { isIOSApp } from "@/lib/platform";
+import { isNativeIOSApp } from "@/lib/nativePlatform";
 import { supabase } from "@/lib/supabaseClient";
 
 type CourseRow = {
@@ -34,18 +34,16 @@ export default function EnrollPage() {
   const [email, setEmail] = React.useState<string>("");
   const [course, setCourse] = React.useState<Course | null>(null);
   const [notice, setNotice] = React.useState<string>("");
-  const isIOS = React.useMemo(() => isIOSApp(), []);
+  const [enrollmentStatus, setEnrollmentStatus] = React.useState<"unknown" | "enrolled" | "not_enrolled">("unknown");
+  const isIOS = React.useMemo(() => isNativeIOSApp(), []);
   const iosAccessRequired = (
     <div className="space-y-2 text-sm text-muted">
       <div className="text-base font-semibold text-ink">Access Required</div>
       <p>
-        This mobile app allows you to sign in and use any books or knowledge materials that are already part of your KDS Learning account.
+        This iOS app is a companion viewer for KDS learners. New enrollments and payments are managed outside this app.
       </p>
       <p>
-        To unlock this item, please ensure it has been added to your account on the KDS Learning website: www.panavestkds.com.
-      </p>
-      <p>
-        If it is already available on your account, simply sign in with the same details here and it will appear automatically.
+        If you already have access to this course, please sign in with your KDS account.
       </p>
     </div>
   );
@@ -95,6 +93,28 @@ export default function EnrollPage() {
       });
     })();
   }, [slug, router]);
+
+  // Check enrollment and redirect to dashboard if already enrolled
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!userId || !course?.id) return;
+      const { data, error } = await supabase
+        .from("enrollments")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("course_id", course.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!error && data) {
+        setEnrollmentStatus("enrolled");
+        router.replace(`/courses/${slug}/dashboard`);
+      } else {
+        setEnrollmentStatus("not_enrolled");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, course?.id, router, slug]);
 
   // Verify return from Paystack (?verify=1&reference=…)
   React.useEffect(() => {
@@ -152,6 +172,24 @@ export default function EnrollPage() {
     return (
       <div className="mx-auto max-w-screen-md px-4 py-10">
         {notice || "Loading…"}
+      </div>
+    );
+  }
+
+  if (enrollmentStatus === "enrolled") {
+    return (
+      <div className="mx-auto max-w-screen-md px-4 py-10 space-y-3">
+        <h1 className="text-2xl font-bold">You already have access</h1>
+        <p className="text-[color:var(--color-text-muted)]">
+          Redirecting you to the course dashboard…
+        </p>
+        <button
+          type="button"
+          onClick={() => router.replace(`/courses/${slug}/dashboard`)}
+          className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 ring-1 ring-[color:var(--color-light)] hover:bg-[color:var(--color-light)]/50"
+        >
+          Go to Dashboard
+        </button>
       </div>
     );
   }
