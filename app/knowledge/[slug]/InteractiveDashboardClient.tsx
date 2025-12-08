@@ -84,6 +84,28 @@ export function InteractiveDashboardClient({
     }
   }, [iframeSrc]);
 
+  // iOS zoom-prevention injection inside the Storyline iframe
+  useEffect(() => {
+    if (iframeStatus !== "loaded") return;
+
+    const iframeEl = document.querySelector("iframe");
+    if (!iframeEl) return;
+
+    try {
+      const doc = iframeEl.contentDocument;
+      const style = doc.createElement("style");
+      style.innerHTML = `
+      input, textarea, select {
+        font-size: 16px !important;
+        -webkit-text-size-adjust: 100% !important;
+      }
+    `;
+      doc.head.appendChild(style);
+    } catch (err) {
+      console.log("No-zoom CSS injection skipped (cross-origin)", err);
+    }
+  }, [iframeStatus]);
+
   const showDebug = native || process.env.NODE_ENV !== "production";
 
   if (process.env.NODE_ENV !== "production") {
@@ -130,35 +152,37 @@ export function InteractiveDashboardClient({
         </div>
       ) : (
         <div className="w-full rounded-2xl bg-white border border-[color:var(--color-light)] p-4">
-          <iframe
-            src={iframeSrc}
-            title={title ?? "Interactive knowledge"}
-            className="w-full"
-            style={{ border: "none", minHeight: "70vh" }}
-            referrerPolicy="no-referrer"
-            // NOTE: No proxy, so Storyline assets keep their own paths and load correctly.
-            sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-downloads"
-            allow="fullscreen; autoplay; encrypted-media"
-            allowFullScreen
-            onLoad={() => {
-              setIframeStatus("loaded");
-              if (native) {
-                console.log("[KDS PWA interactive iframe] onLoad", {
-                  slug,
-                  iframeSrc,
-                });
-              }
-            }}
-            onError={() => {
-              setIframeStatus("error");
-              if (native) {
-                console.log("[KDS PWA interactive iframe] onError", {
-                  slug,
-                  iframeSrc,
-                });
-              }
-            }}
-          />
+          {/* Loading spinner */}
+          {iframeStatus === "loading" && (
+            <div className="w-full py-10 flex justify-center">
+              <div className="animate-spin h-10 w-10 rounded-full border-4 border-blue-600 border-t-transparent"></div>
+            </div>
+          )}
+
+          {/* Fade-in iframe */}
+          <div
+            className="w-full transition-opacity duration-300"
+            style={{ opacity: iframeStatus === "loaded" ? 1 : 0 }}
+          >
+            <iframe
+              src={iframeSrc}
+              title={title ?? "Interactive knowledge"}
+              className="w-full"
+              style={{ border: "none", minHeight: "80vh" }}
+              referrerPolicy="no-referrer"
+              sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-downloads"
+              allow="fullscreen; autoplay"
+              allowFullScreen
+              onLoad={() => {
+                setIframeStatus("loaded");
+                console.log("[KDS Interactive] iframe loaded");
+              }}
+              onError={() => {
+                setIframeStatus("error");
+                console.log("[KDS Interactive] iframe error");
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

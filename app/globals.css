@@ -53,6 +53,10 @@ button {
   user-select: text;
 }
 
+iframe {
+  -webkit-text-size-adjust: 100% !important;
+}
+
 /* Links use app colors */
 a {
   color: inherit;
