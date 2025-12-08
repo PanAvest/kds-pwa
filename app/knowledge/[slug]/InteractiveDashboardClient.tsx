@@ -161,6 +161,18 @@ export function InteractiveDashboardClient({
     };
   }, [interactivePath]);
 
+  useEffect(() => {
+    function onInteractivePing(e: any) {
+      console.log("[KDS Interactive] Progress ping:", e.detail);
+
+      // Optional: You may connect this to Supabase in the future,
+      // e.g. to auto-mark the slide as opened.
+    }
+
+    window.addEventListener("interactive-progress", onInteractivePing);
+    return () => window.removeEventListener("interactive-progress", onInteractivePing);
+  }, []);
+
   // Console debug
   if (process.env.NODE_ENV !== "production") {
     console.log("[KDS interactive debug]", {
@@ -245,6 +257,19 @@ export function InteractiveDashboardClient({
         </div>
       )}
 
+      {native && iframeSrc && (
+        <div className="mt-3">
+          <a
+            href={absolute}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs underline text-blue-700"
+          >
+            If the module does not appear, tap here to open it externally.
+          </a>
+        </div>
+      )}
+
       {deliveryMode !== "interactive" ? (
         <div className="rounded-xl border border-[color:var(--color-light)] bg-white px-4 py-3 text-sm">
           This knowledge module is not marked as interactive.
@@ -259,28 +284,40 @@ export function InteractiveDashboardClient({
             src={iframeSrc}
             title={title ?? "Interactive knowledge"}
             className="w-full"
-            style={{ border: "none", minHeight: "70vh" }}
+            style={{ border: "none", minHeight: "85vh" }}
             referrerPolicy="no-referrer"
-            sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-downloads"
-            allow="fullscreen; autoplay"
+            sandbox="
+    allow-same-origin
+    allow-scripts
+    allow-forms
+    allow-popups
+    allow-modals
+    allow-downloads
+  "
+            allow="fullscreen *; autoplay *; clipboard-read; clipboard-write"
             allowFullScreen
             onLoad={() => {
               setIframeStatus("loaded");
+
+              // Log inside native shells
               if (native) {
-                console.log("[KDS PWA interactive iframe] onLoad", {
-                  slug,
-                  iframeSrc,
-                });
+                console.log("[KDS Interactive] iframe loaded:", iframeSrc);
+              }
+
+              // Fire a “progress ping” so we can save that the interactive module was opened
+              try {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("interactive-progress", {
+                    detail: { slug, timestamp: Date.now() }
+                  }));
+                }
+              } catch (err) {
+                console.log("[KDS interactive progress ping failed]", err);
               }
             }}
             onError={() => {
               setIframeStatus("error");
-              if (native) {
-                console.log("[KDS PWA interactive iframe] onError", {
-                  slug,
-                  iframeSrc,
-                });
-              }
+              if (native) console.log("[KDS Interactive] iframe error:", iframeSrc);
             }}
           />
         </div>
