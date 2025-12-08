@@ -85,6 +85,7 @@ export default function EbookDetailPage() {
   const pagesRef = useRef<HTMLDivElement | null>(null);
   const pdfDocRef = useRef<PdfDoc | null>(null);
   const lastContainerWidthRef = useRef<number>(0);
+  const renderingRef = useRef(false); // blocks overlapping renders that append duplicate pages
 
   const dashboardHref = "/dashboard";
   const flagOfflineFromError = useCallback((err: unknown) => {
@@ -319,7 +320,9 @@ export default function EbookDetailPage() {
 
   /** Core renderer with correct scaling and scroll behavior */
   const renderPdf = useCallback(async () => {
+    if (renderingRef.current) return; // already rendering; skip to avoid duplicate canvases
     if (!pagesRef.current || !scrollRef.current) return;
+    renderingRef.current = true;
     const pagesEl = pagesRef.current;
     const scroller = scrollRef.current;
 
@@ -361,6 +364,7 @@ export default function EbookDetailPage() {
       flagOfflineFromError(e);
     } finally {
       setRendering(false);
+      renderingRef.current = false;
     }
   }, [ensurePdfDoc, fitMode, zoom, flagOfflineFromError]);
 

@@ -43,6 +43,7 @@ function InteractivePlayer({ src, title = "Interactive course" }: { src: string;
 export default function KnowledgeDashboardPage() {
   const { slug } = useParams<Params>();
   const [course, setCourse] = useState<Course | null>(null);
+  const [supabaseError, setSupabaseError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -50,14 +51,17 @@ export default function KnowledgeDashboardPage() {
       try {
         const { data, error } = await supabase
           .from("courses")
-          .select("interactive_path")
+          .select("interactive_path,delivery_mode")
           .eq("slug", slug)
           .maybeSingle();
+        setSupabaseError(error?.message ?? null);
         if (!error && data) {
-          // delivery_mode is assumed interactive on this page; keep query unchanged per requirements
-          setCourse({ interactive_path: data.interactive_path ?? null, delivery_mode: "interactive" });
-        } else setCourse(null);
+          setCourse({ interactive_path: data.interactive_path ?? null, delivery_mode: data.delivery_mode ?? null });
+        } else {
+          setCourse(null);
+        }
       } catch {
+        setSupabaseError("Unexpected error");
         setCourse(null);
       }
     })();
@@ -65,8 +69,15 @@ export default function KnowledgeDashboardPage() {
 
   const interactiveUrl = useMemo(() => buildInteractiveSrc(course), [course]);
 
-  if (process.env.NODE_ENV !== "production" && interactiveUrl) {
-    console.log("[KDS PWA interactive src]", interactiveUrl);
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[KDS PWA interactive debug]", {
+      slug,
+      supabaseError,
+      course,
+      delivery_mode: course?.delivery_mode,
+      interactive_path: course?.interactive_path,
+      interactiveSrc: interactiveUrl,
+    });
   }
 
   if (!slug) {
