@@ -8,9 +8,33 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type Params = { slug: string };
+type Course = { interactive_path: string | null };
 
-const MAIN_SITE_ORIGIN =
-  process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN ?? "https://panavestkds.com";
+function buildInteractiveSrc(course: Course | null | undefined): string | null {
+  const raw = course?.interactive_path?.trim();
+  if (!raw) return null;
+
+  // If the value is already an absolute URL, keep it
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+
+  // Otherwise treat it as a relative path into public/interactive,
+  // just like the panavest-courses web app.
+  // Ensure it has a leading slash, but do NOT prefix with MAIN_SITE_ORIGIN.
+  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+
+  // Some records use /interactive/.../story_html5.html directly,
+  // others may be /interactive/... or /interactive/.../.
+  // Only append a default file IF there is no ".html" in the path.
+  if (!withSlash.includes(".html")) {
+    return withSlash.endsWith("/")
+      ? `${withSlash}story_html5.html`
+      : `${withSlash}/story_html5.html`;
+  }
+
+  return withSlash;
+}
 
 function InteractivePlayer({ src, title = "Interactive course" }: { src: string; title?: string }) {
   return (
@@ -29,7 +53,7 @@ function InteractivePlayer({ src, title = "Interactive course" }: { src: string;
 
 export default function KnowledgeDashboardPage() {
   const { slug } = useParams<Params>();
-  const [course, setCourse] = useState<{ interactive_path: string | null } | null>(null);
+  const [course, setCourse] = useState<Course | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -49,27 +73,7 @@ export default function KnowledgeDashboardPage() {
     })();
   }, [slug]);
 
-  const interactiveUrl = useMemo(() => {
-    if (!course?.interactive_path) return null;
-
-    const raw = course.interactive_path.trim();
-
-    // If Supabase already stores a full URL, just use it.
-    if (/^https?:\/\//i.test(raw)) {
-      return raw;
-    }
-
-    // Otherwise treat it as the same relative path the main site uses,
-    // e.g. "/interactive/ghie-business-ethics" or "/interactive/ghie-business-ethics/index.html"
-    const normalizedPath = raw.startsWith("/") ? raw : `/${raw}`;
-
-    // Ensure we end on an html file – if it doesn't already end with .html, append /index.html
-    const withIndex = normalizedPath.endsWith(".html")
-      ? normalizedPath
-      : `${normalizedPath.replace(/\/+$/, "")}/index.html`;
-
-    return `${MAIN_SITE_ORIGIN}${withIndex}`;
-  }, [course?.interactive_path]);
+  const interactiveUrl = useMemo(() => buildInteractiveSrc(course), [course]);
 
   if (!slug) {
     return (
@@ -87,13 +91,13 @@ export default function KnowledgeDashboardPage() {
       {interactiveUrl ? (
         <>
           <div className="mt-3 w-full rounded-xl overflow-hidden border border-light bg-black">
-                    <iframe
-                      src={interactiveUrl}
-                      title="Interactive course player"
-                      className="w-full h-[70vh] bg-black"
-                      allowFullScreen
-                    />
-                  </div>
+            <iframe
+              src={interactiveUrl}
+              title="Interactive course player"
+              className="w-full h-[70vh] bg-black"
+              allowFullScreen
+            />
+          </div>
           <div className="text-xs text-muted">
             If it does not load,{" "}
             <a className="underline" href={interactiveUrl} target="_blank" rel="noreferrer">
