@@ -3,17 +3,33 @@
 import { useEffect, useMemo, useState } from "react";
 import { isNativeApp } from "@/lib/nativePlatform";
 
-const MAIN_ORIGIN =
-  (process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://panavestkds.com").replace(
-    /\/+$/,
-    ""
-  );
+type InteractiveDebugInfo = {
+  ok?: boolean;
+  status?: number;
+  statusText?: string;
+  contentType?: string | null;
+  finalUrl?: string;
+  mainOrigin?: string;
+  raw?: string | null;
+  relative?: string | null;
+  absolute?: string | null;
+  reason?: string;
+  error?: string;
+};
+
+const MAIN_ORIGIN = (
+  process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://panavestkds.com"
+).replace(/\/+$/, "");
 
 function buildInteractivePaths(raw: string | null | undefined) {
-  if (!raw) return { relative: null as string | null, absolute: null as string | null };
+  if (!raw) {
+    return { relative: null as string | null, absolute: null as string | null };
+  }
 
   let trimmed = raw.trim();
-  if (!trimmed) return { relative: null, absolute: null };
+  if (!trimmed) {
+    return { relative: null, absolute: null };
+  }
 
   // If admin already stored a full URL, just use it as-is
   if (/^https?:\/\//i.test(trimmed)) {
@@ -58,9 +74,12 @@ export function InteractiveDashboardClient({
   interactivePath,
 }: InteractiveDashboardClientProps) {
   const [native, setNative] = useState(false);
-  const [iframeStatus, setIframeStatus] = useState<"idle" | "loading" | "loaded" | "error">(
-    "idle"
-  );
+  const [iframeStatus, setIframeStatus] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
+
+  const [debugInfo, setDebugInfo] = useState<InteractiveDebugInfo | null>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
 
   const { relative, absolute } = useMemo(
     () => buildInteractivePaths(interactivePath),
@@ -81,6 +100,7 @@ export function InteractiveDashboardClient({
     return absolute;
   }, [native, relative, absolute]);
 
+  // Detect native shell
   useEffect(() => {
     try {
       setNative(isNativeApp());
@@ -89,6 +109,7 @@ export function InteractiveDashboardClient({
     }
   }, []);
 
+  // Track iframe loading state
   useEffect(() => {
     if (iframeSrc) {
       setIframeStatus("loading");
@@ -97,6 +118,50 @@ export function InteractiveDashboardClient({
     }
   }, [iframeSrc]);
 
+  // Hit debug API to test upstream Storyline URL
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!interactivePath) {
+      setDebugInfo(null);
+      return;
+    }
+
+    (async () => {
+      try {
+        setDebugLoading(true);
+        const res = await fetch(
+          `/api/interactive/debug?path=${encodeURIComponent(interactivePath)}`,
+          { cache: "no-store" }
+        );
+        const json = await res.json();
+        if (!cancelled) {
+          setDebugInfo(json);
+        }
+
+        if (!cancelled && process.env.NODE_ENV !== "production") {
+          console.log("[KDS interactive debug API]", json);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setDebugInfo({
+            ok: false,
+            error: (e as Error).message,
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setDebugLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interactivePath]);
+
+  // Console debug
   if (process.env.NODE_ENV !== "production") {
     console.log("[KDS interactive debug]", {
       slug,
@@ -123,22 +188,60 @@ export function InteractiveDashboardClient({
 
   return (
     <div className="mt-3">
-      {/* Native debug badge so we can see exactly what src is being used */}
-      {native && (
-        <div className="mb-3 inline-flex max-w-full flex-col gap-1 rounded-xl bg-black/80 px-3 py-2 text-[10px] text-green-200">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">[INTERACTIVE DEBUG]</span>
-            <span>status: {iframeStatus}</span>
+      {/* Debug panel: always visible on native; dev-only on web */}
+      {(process.env.NODE_ENV !== "production" || native) && (
+        <div className="mb-3 rounded-xl bg-slate-900 text-[10px] text-slate-100 p-3 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold">[INTERACTIVE DEBUG PANEL]</span>
+            <span>
+              iframeStatus: <b>{iframeStatus}</b>
+            </span>
+          </div>
+          <div>slug: <code>{slug}</code></div>
+          <div>deliveryMode: <code>{deliveryMode || "null"}</code></div>
+          <div>NODE_ENV: <code>{process.env.NODE_ENV}</code></div>
+          <div>native shell: <code>{String(native)}</code></div>
+          <div>
+            DB interactivePath: <code>{interactivePath || "null"}</code>
+          </div>
+          <div>
+            MAIN_ORIGIN: <code>{debugInfo?.mainOrigin || MAIN_ORIGIN}</code>
+          </div>
+          <div>
+            normalized relative: <code>{debugInfo?.relative || relative || "null"}</code>
           </div>
           <div className="truncate">
-            interactivePath: <code>{interactivePath || "null"}</code>
-          </div>
-          <div className="truncate">
-            relative: <code>{relative || "null"}</code>
+            normalized absolute: <code>{debugInfo?.absolute || absolute || "null"}</code>
           </div>
           <div className="truncate">
             iframeSrc: <code>{iframeSrc || "null"}</code>
           </div>
+          <div>
+            upstream status:{" "}
+            {debugLoading
+              ? "loading…"
+              : `${debugInfo?.status ?? "?"} ${debugInfo?.statusText ?? ""}`}
+          </div>
+          <div>
+            upstream ok:{" "}
+            {debugInfo?.ok === undefined ? "?" : String(debugInfo.ok)}
+          </div>
+          <div>
+            content-type: <code>{debugInfo?.contentType || "n/a"}</code>
+          </div>
+          <div className="truncate">
+            finalUrl: <code>{debugInfo?.finalUrl || "n/a"}</code>
+          </div>
+          {debugInfo?.reason && (
+            <div className="text-amber-300">
+              reason: {debugInfo.reason}
+            </div>
+          )}
+          {debugInfo?.error && (
+            <div className="text-red-300">
+              error: {debugInfo.error}
+            </div>
+          )}
         </div>
       )}
 
