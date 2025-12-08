@@ -6,23 +6,31 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     let path = searchParams.get("path") || "";
+
     if (!path) {
       return NextResponse.json({ error: "path required" }, { status: 400 });
     }
 
-    // ensure path starts with /
-    if (!path.startsWith("/")) {
-      path = "/" + path;
-    }
+    // Trim stray whitespace
+    path = path.trim();
 
-    // Canonical origin for the main KDS site
-    const origin =
+    const mainOrigin =
       process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN?.replace(/\/+$/, "") ||
       "https://panavestkds.com";
 
-    const url = `${origin}${path}`;
+    // If "path" is a full URL, use it directly
+    let targetUrl: string;
+    if (/^https?:\/\//i.test(path)) {
+      targetUrl = path;
+    } else {
+      // Treat as relative to mainOrigin
+      if (!path.startsWith("/")) {
+        path = `/${path}`;
+      }
+      targetUrl = `${mainOrigin}${path}`;
+    }
 
-    const upstream = await fetch(url, {
+    const upstream = await fetch(targetUrl, {
       headers: { "User-Agent": "KDS-PWA-Proxy" },
       redirect: "follow",
     });
@@ -40,9 +48,13 @@ export async function GET(req: Request) {
         "Access-Control-Allow-Headers": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "X-PWA-Proxy": "1",
+        "X-PWA-Proxy-Upstream": targetUrl,
       },
     });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return NextResponse.json(
+      { error: (e as Error).message },
+      { status: 500 }
+    );
   }
 }
