@@ -5,7 +5,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import NoInternet from "@/components/NoInternet";
 import EnrollCTA from "@/components/EnrollCTA";
@@ -27,12 +27,20 @@ export default function CoursePreviewPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
   const router = useRouter();
-  const native = useMemo(() => isNativeApp(), []);
+  const [native, setNative] = useState(false);
 
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrolled, setEnrolled] = useState<boolean>(false);
   const [userChecked, setUserChecked] = useState(false);
+
+  useEffect(() => {
+    try {
+      setNative(isNativeApp());
+    } catch {
+      setNative(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,9 +86,9 @@ export default function CoursePreviewPage() {
       if (cancelled) return;
       const enrollment = data;
       const isEnrolled = !error && !!data; // matches Programs list & Dashboard (any row = enrolled)
-      if (process.env.NODE_ENV !== "production" && isNativeApp()) {
+      if (process.env.NODE_ENV !== "production" && native) {
         console.log("[PROGRAM DETAIL DEBUG]", {
-          isNative: isNativeApp(),
+          isNative: native,
           slug,
           courseId: course?.id,
           userId: user?.id,
@@ -93,7 +101,7 @@ export default function CoursePreviewPage() {
       setUserChecked(true);
     })();
     return () => { cancelled = true; };
-  }, [slug, course?.id]);
+  }, [slug, course?.id, native]);
 
   if (loading) {
     return (

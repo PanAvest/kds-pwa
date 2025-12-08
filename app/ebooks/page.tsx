@@ -22,8 +22,8 @@ export default function Ebooks() {
   const router = useRouter();
   const sp = useSearchParams();
   const qParam = sp.get("q") ?? "";
-  const native = useMemo(() => isNativeApp(), []);
-  const isIOS = useMemo(() => isNativeIOSApp(), []);
+  const [native, setNative] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
   const { isOffline, markOffline, markOnline } = useOfflineMonitor();
 
   const [q, setQ] = useState(qParam);
@@ -31,6 +31,19 @@ export default function Ebooks() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      setNative(isNativeApp());
+    } catch {
+      setNative(false);
+    }
+    try {
+      setIsIOS(isNativeIOSApp());
+    } catch {
+      setIsIOS(false);
+    }
+  }, []);
 
   // Keep input synced when user goes back
   useEffect(() => setQ(qParam), [qParam]);

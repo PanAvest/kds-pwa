@@ -55,7 +55,7 @@ export default function EbookDetailPage() {
   const search = useSearchParams();
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
-  const isNative = useMemo(() => isNativeApp(), []);
+  const [isNative, setIsNative] = useState(false);
   const { isOffline, markOffline, markOnline } = useOfflineMonitor();
 
   const [ebook, setEbook] = useState<Ebook | null>(null);
@@ -78,6 +78,14 @@ export default function EbookDetailPage() {
   const [zoom, setZoom] = useState<number>(1);
   const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 3;
+
+  useEffect(() => {
+    try {
+      setIsNative(isNativeApp());
+    } catch {
+      setIsNative(false);
+    }
+  }, []);
 
   // Refs
   const readerWrapRef = useRef<HTMLDivElement | null>(null);

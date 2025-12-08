@@ -7,6 +7,7 @@
 import React, { useCallback, useMemo, useRef } from "react";
 import html2canvas from "html2canvas";
 import { isNativePlatform, savePdfToDevice } from "@/lib/nativeDownload";
+import { formatDate } from "@/lib/dateFormat";
 
 type Props = {
   recipient: string;
@@ -29,7 +30,8 @@ function buildQrUrl(value: string, provider: Props["qrProvider"]) {
   if (provider === "none") return null;
   if (provider === "img") return value; // treat as already-built image URL
   const d = encodeURIComponent(value);
-  if (provider === "goqr") return `https://api.qrserver.com/v1/create-qr-code/?size=${QR_SIZE}x${QR_SIZE}&data=${d}&margin=1`;
+  if (provider === "goqr")
+    return `https://api.qrserver.com/v1/create-qr-code/?size=${QR_SIZE}x${QR_SIZE}&data=${d}&margin=1`;
   return `https://quickchart.io/qr?text=${d}&size=${QR_SIZE}&margin=1`;
 }
 
@@ -56,16 +58,23 @@ export default function SimpleCertificate({
   qrProvider = "quickchart",
 }: Props) {
   const issued = new Date(date);
-  const issuedStr = isNaN(issued.getTime()) ? date : issued.toLocaleDateString();
-  const border = { boxShadow: `inset 0 0 0 2px ${accent}20, inset 0 0 0 6px #ffffff, inset 0 0 0 8px ${accent}` };
+  const issuedStr = isNaN(issued.getTime()) ? date : formatDate(issued);
+  const border = {
+    boxShadow: `inset 0 0 0 2px ${accent}20, inset 0 0 0 6px #ffffff, inset 0 0 0 8px ${accent}`,
+  };
   const captureRef = useRef<HTMLDivElement | null>(null);
   const resolvedId = certId || "KDS-CERT";
-  const resolvedQr = useMemo(() => (qrValue ? buildQrUrl(qrValue, qrProvider) : null), [qrValue, qrProvider]);
+  const resolvedQr = useMemo(
+    () => (qrValue ? buildQrUrl(qrValue, qrProvider) : null),
+    [qrValue, qrProvider]
+  );
 
   // Manual test: ensure this saves on web (downloads) and native (share sheet) and falls back to PNG on web errors.
   const handleDownloadPdf = useCallback(async () => {
     if (!captureRef.current) return;
-    const baseName = resolvedId ? `PanAvest-Certificate-${resolvedId}` : "PanAvest-Certificate";
+    const baseName = resolvedId
+      ? `PanAvest-Certificate-${resolvedId}`
+      : "PanAvest-Certificate";
 
     let imgData: string | null = null;
     try {
@@ -81,7 +90,11 @@ export default function SimpleCertificate({
       imgData = canvas.toDataURL("image/png");
 
       const { jsPDF } = await import("jspdf");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pageWidth - 20;
@@ -113,8 +126,13 @@ export default function SimpleCertificate({
       >
         {/* Header */}
         <div className="text-center">
-          <div className="text-xs tracking-widest text-gray-500">CERTIFICATE OF COMPLETION</div>
-          <h2 className="mt-1 text-2xl sm:text-3xl font-extrabold" style={{ color: accent }}>
+          <div className="text-xs tracking-widest text-gray-500">
+            CERTIFICATE OF COMPLETION
+          </div>
+          <h2
+            className="mt-1 text-2xl sm:text-3xl font-extrabold"
+            style={{ color: accent }}
+          >
             Knowledge Development Series
           </h2>
         </div>
@@ -122,9 +140,15 @@ export default function SimpleCertificate({
         {/* Body */}
         <div className="mt-6 sm:mt-8 grid gap-4 sm:gap-6">
           <p className="text-center text-sm text-gray-600">{blurb}</p>
-          <div className="text-center text-2xl sm:text-3xl font-bold">{recipient || "Your Name"}</div>
-          <p className="text-center text-sm text-gray-600">has successfully completed</p>
-          <div className="text-center text-xl sm:text-2xl font-semibold">{course || "Course Title"}</div>
+          <div className="text-center text-2xl sm:text-3xl font-bold">
+            {recipient || "Your Name"}
+          </div>
+          <p className="text-center text-sm text-gray-600">
+            has successfully completed
+          </p>
+          <div className="text-center text-xl sm:text-2xl font-semibold">
+            {course || "Course Title"}
+          </div>
 
           <div className="mt-2 flex flex-wrap items-center justify-center gap-6 text-xs text-gray-600">
             <div>
@@ -140,8 +164,12 @@ export default function SimpleCertificate({
         <div className="mt-8 sm:mt-10 flex items-end justify-between gap-4">
           <div className="min-w-0">
             <div className="h-[2px] w-40 bg-gray-300" />
-            <div className="mt-1 text-xs text-gray-600">Authorized Signatory</div>
-            <div className="text-sm font-semibold text-gray-800">{signerName}</div>
+            <div className="mt-1 text-xs text-gray-600">
+              Authorized Signatory
+            </div>
+            <div className="text-sm font-semibold text-gray-800">
+              {signerName}
+            </div>
             <div className="text-[11px] text-gray-500">{signerTitle}</div>
           </div>
 
@@ -152,7 +180,9 @@ export default function SimpleCertificate({
                 alt="QR code"
                 className="w-20 h-20 sm:w-24 sm:h-24 border rounded-md"
               />
-              <div className="mt-1 text-[10px] text-gray-500">Scan to verify</div>
+              <div className="mt-1 text-[10px] text-gray-500">
+                Scan to verify
+              </div>
             </div>
           ) : (
             <div />

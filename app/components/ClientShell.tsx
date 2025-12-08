@@ -7,12 +7,21 @@ import OfflineOverlay from "./OfflineOverlay";
 import { useOfflineStatus } from "@/app/hooks/useOfflineStatus";
 import { ToastHost } from "@/components/ui/toast";
 import { isNativeApp } from "@/lib/nativePlatform";
+import { useEffect, useState } from "react";
 
 type Props = { children: ReactNode };
 
 export default function ClientShell({ children }: Props) {
   const { isOffline, retry } = useOfflineStatus();
-  const native = isNativeApp();
+  const [native, setNative] = useState(false);
+
+  useEffect(() => {
+    try {
+      setNative(isNativeApp());
+    } catch {
+      setNative(false);
+    }
+  }, []);
 
   return (
     <>

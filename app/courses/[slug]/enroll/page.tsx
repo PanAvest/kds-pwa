@@ -36,7 +36,15 @@ export default function EnrollPage() {
   const [course, setCourse] = React.useState<Course | null>(null);
   const [notice, setNotice] = React.useState<string>("");
   const [enrollmentStatus, setEnrollmentStatus] = React.useState<"unknown" | "enrolled" | "not_enrolled">("unknown");
-  const isNative = React.useMemo(() => isNativeApp(), []);
+  const [isNative, setIsNative] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      setIsNative(isNativeApp());
+    } catch {
+      setIsNative(false);
+    }
+  }, []);
 
   // Require auth
   React.useEffect(() => {

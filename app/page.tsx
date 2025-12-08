@@ -42,8 +42,21 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [fullName, setFullName] = useState<string>("")
   const nameMissing = !fullName?.trim()
-  const isNative = useMemo(() => isNativeApp(), [])
-  const isNativeIOS = useMemo(() => isNativeIOSApp(), [])
+  const [isNative, setIsNative] = useState(false)
+  const [isNativeIOS, setIsNativeIOS] = useState(false)
+
+  useEffect(() => {
+    try {
+      setIsNative(isNativeApp())
+    } catch {
+      setIsNative(false)
+    }
+    try {
+      setIsNativeIOS(isNativeIOSApp())
+    } catch {
+      setIsNativeIOS(false)
+    }
+  }, [])
 
   useEffect(() => {
     let alive = true

@@ -21,10 +21,8 @@ type EnrollState =
 
 export default function EnrollCTA({ courseId, slug, className, readerMode }: Props) {
   const [state, setState] = useState<EnrollState>({ kind: "loading" });
-  const isViewerMode = useMemo(
-    () => (typeof readerMode === "boolean" ? readerMode : isNativeApp()),
-    [readerMode]
-  );
+  const [native, setNative] = useState(false);
+  const isViewerMode = useMemo(() => (typeof readerMode === "boolean" ? readerMode : native), [readerMode, native]);
   const iosAccessRequired = (
     <div className="space-y-2 text-sm text-muted">
       <div className="text-base font-semibold text-ink">Access Required</div>
@@ -137,3 +135,10 @@ export default function EnrollCTA({ courseId, slug, className, readerMode }: Pro
     </Link>
   );
 }
+  useEffect(() => {
+    try {
+      setNative(isNativeApp());
+    } catch {
+      setNative(false);
+    }
+  }, []);

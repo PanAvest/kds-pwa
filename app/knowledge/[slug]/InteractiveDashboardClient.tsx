@@ -44,16 +44,25 @@ export function InteractiveDashboardClient({
   interactivePath,
 }: InteractiveDashboardClientProps) {
   const interactiveUrl = normalizeInteractivePath(interactivePath);
+  const [native, setNative] = useState(false);
   const [iframeStatus, setIframeStatus] = useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
+
+  useEffect(() => {
+    try {
+      setNative(isNativeApp());
+    } catch {
+      setNative(false);
+    }
+  }, []);
 
   if (process.env.NODE_ENV !== "production") {
     console.log("DEBUG interactive iframe URL:", interactiveUrl, {
       slug,
       deliveryMode,
       interactivePath,
-      isNative: isNativeApp(),
+      isNative: native,
     });
   }
 
@@ -66,20 +75,20 @@ export function InteractiveDashboardClient({
   }, [interactiveUrl]);
 
   useEffect(() => {
-    if (!isNativeApp()) return;
+    if (!native) return;
 
     console.log("[KDS PWA interactive debug]", {
       slug,
       delivery_mode: deliveryMode,
       interactive_path: interactivePath,
       interactiveUrl,
-      isNative: isNativeApp(),
+      isNative: native,
     });
-  }, [slug, deliveryMode, interactivePath, interactiveUrl]);
+  }, [slug, deliveryMode, interactivePath, interactiveUrl, native]);
 
   return (
     <div className="mt-3">
-      {isNativeApp() && (
+      {native && (
         <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-full bg-black/80 px-3 py-1 text-[11px] text-green-200">
           <span className="font-semibold">[DEBUG]</span>
           <span>iframeStatus: {iframeStatus}</span>
@@ -111,7 +120,7 @@ export function InteractiveDashboardClient({
             allowFullScreen
             onLoad={() => {
               setIframeStatus("loaded");
-              if (isNativeApp()) {
+              if (native) {
                 console.log("[KDS PWA interactive iframe] onLoad", {
                   slug,
                   interactiveUrl,
@@ -120,7 +129,7 @@ export function InteractiveDashboardClient({
             }}
             onError={() => {
               setIframeStatus("error");
-              if (isNativeApp()) {
+              if (native) {
                 console.log("[KDS PWA interactive iframe] onError", {
                   slug,
                   interactiveUrl,

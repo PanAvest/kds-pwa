@@ -24,7 +24,15 @@ export default function KnowledgePage() {
   const [all, setAll] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const native = useMemo(() => isNativeApp(), []);
+  const [native, setNative] = useState(false);
+
+  useEffect(() => {
+    try {
+      setNative(isNativeApp());
+    } catch {
+      setNative(false);
+    }
+  }, []);
 
   useEffect(() => {
     let alive = true;
