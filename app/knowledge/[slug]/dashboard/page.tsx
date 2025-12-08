@@ -8,32 +8,21 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type Params = { slug: string };
-type Course = { interactive_path: string | null };
+type Course = { interactive_path: string | null; delivery_mode?: string | null };
 
 function buildInteractiveSrc(course: Course | null | undefined): string | null {
   const raw = course?.interactive_path?.trim();
   if (!raw) return null;
 
-  // If the value is already an absolute URL, keep it
   if (raw.startsWith("http://") || raw.startsWith("https://")) {
     return raw;
   }
 
-  // Otherwise treat it as a relative path into public/interactive,
-  // just like the panavest-courses web app.
-  // Ensure it has a leading slash, but do NOT prefix with MAIN_SITE_ORIGIN.
-  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  const origin =
+    (process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://panavestkds.com").replace(/\/+$/, "");
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
 
-  // Some records use /interactive/.../story_html5.html directly,
-  // others may be /interactive/... or /interactive/.../.
-  // Only append a default file IF there is no ".html" in the path.
-  if (!withSlash.includes(".html")) {
-    return withSlash.endsWith("/")
-      ? `${withSlash}story_html5.html`
-      : `${withSlash}/story_html5.html`;
-  }
-
-  return withSlash;
+  return `${origin}${path}`;
 }
 
 function InteractivePlayer({ src, title = "Interactive course" }: { src: string; title?: string }) {
@@ -65,7 +54,8 @@ export default function KnowledgeDashboardPage() {
           .eq("slug", slug)
           .maybeSingle();
         if (!error && data) {
-          setCourse({ interactive_path: data.interactive_path ?? null });
+          // delivery_mode is assumed interactive on this page; keep query unchanged per requirements
+          setCourse({ interactive_path: data.interactive_path ?? null, delivery_mode: "interactive" });
         } else setCourse(null);
       } catch {
         setCourse(null);
@@ -74,6 +64,10 @@ export default function KnowledgeDashboardPage() {
   }, [slug]);
 
   const interactiveUrl = useMemo(() => buildInteractiveSrc(course), [course]);
+
+  if (process.env.NODE_ENV !== "production" && interactiveUrl) {
+    console.log("[KDS PWA interactive src]", interactiveUrl);
+  }
 
   if (!slug) {
     return (
@@ -88,7 +82,7 @@ export default function KnowledgeDashboardPage() {
       <h1 className="text-xl font-bold">Interactive course</h1>
       <p className="text-sm text-muted">Knowledge dashboard interactive player.</p>
 
-      {interactiveUrl ? (
+      {course?.delivery_mode === "interactive" && interactiveUrl ? (
         <>
           <div className="mt-3 w-full rounded-xl overflow-hidden border border-light bg-black">
             <iframe
