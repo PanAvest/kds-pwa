@@ -1,4 +1,3 @@
-// File: app/api/interactive/proxy/route.ts
 import { NextResponse } from "next/server";
 
 export const runtime = "edge";
@@ -7,13 +6,21 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     let path = searchParams.get("path") || "";
-    if (!path)
+    if (!path) {
       return NextResponse.json({ error: "path required" }, { status: 400 });
+    }
+
+    // ensure path starts with /
     if (!path.startsWith("/")) {
       path = "/" + path;
     }
 
-    const url = `https://panavestkds.com${path}`;
+    // Canonical origin for the main KDS site
+    const origin =
+      process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN?.replace(/\/+$/, "") ||
+      "https://panavestkds.com";
+
+    const url = `${origin}${path}`;
 
     const upstream = await fetch(url, {
       headers: { "User-Agent": "KDS-PWA-Proxy" },

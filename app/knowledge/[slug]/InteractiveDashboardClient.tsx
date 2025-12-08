@@ -1,18 +1,23 @@
 "use client";
-// File: app/knowledge/[slug]/InteractiveDashboardClient.tsx
 
 import { useEffect, useState } from "react";
 import { isNativeApp } from "@/lib/nativePlatform";
 
-function normalizeInteractivePath(
+/**
+ * Normalize a stored interactive_path into a RELATIVE path like:
+ *   /interactive/boardroom/story_html5.html
+ * This is used when we want to go through our proxy, which expects a path.
+ */
+function normalizeInteractiveRelativePath(
   path: string | null | undefined
 ): string | null {
   if (!path) return null;
   const trimmed = path.trim();
   if (!trimmed) return null;
 
+  // Full URLs are handled elsewhere
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
+    return null;
   }
 
   let normalizedPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
@@ -24,11 +29,32 @@ function normalizeInteractivePath(
     normalizedPath = `${normalizedPath}story_html5.html`;
   }
 
+  return normalizedPath;
+}
+
+/**
+ * Normalize a stored interactive_path into an ABSOLUTE URL using the
+ * canonical origin (NEXT_PUBLIC_MAIN_SITE_ORIGIN or fallback).
+ */
+function normalizeInteractiveAbsoluteUrl(
+  path: string | null | undefined
+): string | null {
+  if (!path) return null;
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+
+  const rel = normalizeInteractiveRelativePath(trimmed);
+  if (!rel) return null;
+
   const origin =
     process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN?.replace(/\/+$/, "") ||
-    "https://www.panavestkds.com";
+    "https://panavestkds.com";
 
-  return `${origin}${normalizedPath}`;
+  return `${origin}${rel}`;
 }
 
 type InteractiveDashboardClientProps = {
@@ -44,7 +70,6 @@ export function InteractiveDashboardClient({
   deliveryMode,
   interactivePath,
 }: InteractiveDashboardClientProps) {
-  const interactiveUrl = normalizeInteractivePath(interactivePath);
   const [native, setNative] = useState(false);
   const [iframeStatus, setIframeStatus] = useState<
     "idle" | "loading" | "loaded" | "error"
@@ -58,22 +83,36 @@ export function InteractiveDashboardClient({
     }
   }, []);
 
+  const relativePath = normalizeInteractiveRelativePath(interactivePath);
+  const absoluteUrl = normalizeInteractiveAbsoluteUrl(interactivePath);
+
+  // Use the proxy in the native shell to avoid X-Frame / CORS issues
+  const useProxy = native && !!relativePath;
+
+  const frameSrc = useProxy
+    ? `/api/interactive/proxy?path=${encodeURIComponent(relativePath!)}`
+    : absoluteUrl;
+
   if (process.env.NODE_ENV !== "production") {
-    console.log("DEBUG interactive iframe URL:", interactiveUrl, {
+    console.log("DEBUG interactive iframe URL:", {
       slug,
       deliveryMode,
       interactivePath,
       isNative: native,
+      relativePath,
+      absoluteUrl,
+      useProxy,
+      frameSrc,
     });
   }
 
   useEffect(() => {
-    if (interactiveUrl) {
+    if (frameSrc) {
       setIframeStatus("loading");
     } else {
       setIframeStatus("idle");
     }
-  }, [interactiveUrl]);
+  }, [frameSrc]);
 
   useEffect(() => {
     if (!native) return;
@@ -82,10 +121,12 @@ export function InteractiveDashboardClient({
       slug,
       delivery_mode: deliveryMode,
       interactive_path: interactivePath,
-      interactiveUrl,
+      relativePath,
+      absoluteUrl,
+      frameSrc,
       isNative: native,
     });
-  }, [slug, deliveryMode, interactivePath, interactiveUrl, native]);
+  }, [slug, deliveryMode, interactivePath, relativePath, absoluteUrl, frameSrc, native]);
 
   return (
     <div className="mt-3">
@@ -94,7 +135,7 @@ export function InteractiveDashboardClient({
           <span className="font-semibold">[DEBUG]</span>
           <span>iframeStatus: {iframeStatus}</span>
           <span className="ml-2 truncate">
-            src: <code>{interactiveUrl || "null"}</code>
+            src: <code>{frameSrc || "null"}</code>
           </span>
         </div>
       )}
@@ -103,15 +144,14 @@ export function InteractiveDashboardClient({
         <div className="rounded-xl border border-[color:var(--color-light)] bg-white px-4 py-3 text-sm">
           This knowledge module is not marked as interactive.
         </div>
-      ) : !interactiveUrl ? (
+      ) : !frameSrc ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          This interactive program is not yet configured. Please contact
-          support.
+          This interactive program is not yet configured. Please contact support.
         </div>
       ) : (
         <div className="w-full rounded-2xl bg-white border border-light p-4">
           <iframe
-            src={interactiveUrl}
+            src={frameSrc}
             title={title ?? "Interactive knowledge"}
             className="w-full"
             style={{ border: "none", minHeight: "70vh" }}
@@ -124,7 +164,7 @@ export function InteractiveDashboardClient({
               if (native) {
                 console.log("[KDS PWA interactive iframe] onLoad", {
                   slug,
-                  interactiveUrl,
+                  frameSrc,
                 });
               }
             }}
@@ -133,7 +173,7 @@ export function InteractiveDashboardClient({
               if (native) {
                 console.log("[KDS PWA interactive iframe] onError", {
                   slug,
-                  interactiveUrl,
+                  frameSrc,
                 });
               }
             }}
