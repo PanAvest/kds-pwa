@@ -1,3 +1,4 @@
+// File: components/ui/dialog.tsx
 import { cn } from "@/utils/cn"
 import React from "react"
 

@@ -1,3 +1,4 @@
+// File: lib/supabaseServer.ts
 import {
   createClient,
   type SupabaseClientOptions,

@@ -1,4 +1,5 @@
 "use client";
+// File: app/knowledge/[slug]/InteractiveDashboardClient.tsx
 
 import { useEffect, useState } from "react";
 import { isNativeApp } from "@/lib/nativePlatform";

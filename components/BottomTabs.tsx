@@ -1,4 +1,5 @@
 "use client";
+// File: components/BottomTabs.tsx
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Home, Book, Library, LayoutDashboard } from "lucide-react";

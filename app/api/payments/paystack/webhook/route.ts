@@ -1,3 +1,4 @@
+// File: app/api/payments/paystack/webhook/route.ts
 // Node runtime (for crypto) + always dynamic
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

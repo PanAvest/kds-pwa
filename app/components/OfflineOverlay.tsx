@@ -1,4 +1,5 @@
 "use client";
+// File: app/components/OfflineOverlay.tsx
 
 type Props = {
   visible: boolean;

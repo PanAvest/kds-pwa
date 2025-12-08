@@ -1,4 +1,5 @@
 "use client";
+// File: components/NoInternet.tsx
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 

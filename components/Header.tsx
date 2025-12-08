@@ -1,4 +1,5 @@
 "use client";
+// File: components/Header.tsx
 
 export default function HeaderSpacer() {
   return (

@@ -1,3 +1,4 @@
+// File: ios/App/App/AppDelegate.swift
 import UIKit
 import Capacitor
 import WebKit

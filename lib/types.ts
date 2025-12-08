@@ -1,3 +1,4 @@
+// File: lib/types.ts
 export type Course = {
   id: string
   slug: string

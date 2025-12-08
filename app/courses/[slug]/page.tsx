@@ -1,3 +1,4 @@
+// File: app/courses/[slug]/page.tsx
 // app/courses/[slug]/page.tsx
 // Debug note: isEnrolled on this page now mirrors Programs list/Dashboard by checking enrollments
 // via user_id + course_id (no slug join). Any enrollment row counts as access (same as elsewhere).

@@ -1,3 +1,4 @@
+// File: app/api/interactive/proxy/route.ts
 import { NextResponse } from "next/server";
 
 export const runtime = "edge";

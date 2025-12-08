@@ -1,4 +1,5 @@
 "use client"
+// File: app/ReadySignal.tsx
 
 import { useEffect } from "react"
 

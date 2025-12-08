@@ -1,3 +1,4 @@
+// File: components/SimpleCertificate.tsx
 // Behaviour: Certificate preview + download per README-upgrade.md. Supports QR providers, DOM capture via html2canvas,
 // jsPDF export, and native download (Filesystem + Share). Used in dashboards to preview/download issued and provisional
 // certificates. Manual test: on web, click "Download certificate" and ensure a PDF saves; on native, confirm share sheet

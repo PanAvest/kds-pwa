@@ -1,3 +1,4 @@
+// File: app/knowledge/[slug]/dashboard/page.tsx
 // Behaviour: Interactive knowledge dashboard per main app. Fetches course by slug to read interactive_path (or mapped
 // fallback) and builds an HTTPS URL (never capacitor://). Shows debug URL. Manual test: open a mapped slug and confirm
 // the iframe loads /interactive/<key>/index.html (or the stored interactive_path) and debug text shows the URL.

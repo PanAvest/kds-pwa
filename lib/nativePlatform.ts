@@ -1,3 +1,4 @@
+// File: lib/nativePlatform.ts
 // Client-safe helpers to detect Capacitor + iOS without breaking SSR
 
 export function isNativeApp(): boolean {

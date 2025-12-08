@@ -1,3 +1,4 @@
+// File: app/courses/[slug]/enroll/page.tsx
 // /app/courses/[slug]/enroll/page.tsx
 "use client";
 

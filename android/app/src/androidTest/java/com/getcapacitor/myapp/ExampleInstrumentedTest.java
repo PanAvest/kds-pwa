@@ -1,3 +1,4 @@
+// File: android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java
 package com.getcapacitor.myapp;
 
 import static org.junit.Assert.*;

@@ -1,4 +1,5 @@
 "use client";
+// File: app/hooks/useOfflineStatus.ts
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 

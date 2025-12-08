@@ -1,3 +1,4 @@
+// File: app/dashboard/page.tsx
 // Behaviour: Dashboard per README-upgrade.md. Aligns PWA with main site: slide-based progress, purchased e-books,
 // quiz history, issued + provisional certificates with verify URLs, and download flow that splits web (jsPDF.save)
 // vs native (Filesystem + Share). Manual test: check cert cards render with QR verify link, download works in browser

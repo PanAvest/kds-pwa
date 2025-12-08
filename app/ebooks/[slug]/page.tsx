@@ -1,4 +1,5 @@
 "use client";
+// File: app/ebooks/[slug]/page.tsx
 
 import Image from "next/image";
 import Link from "next/link";

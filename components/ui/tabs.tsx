@@ -1,4 +1,5 @@
 'use client';
+// File: components/ui/tabs.tsx
 
 import { cn } from "@/utils/cn";
 

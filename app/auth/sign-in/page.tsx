@@ -1,3 +1,4 @@
+// File: app/auth/sign-in/page.tsx
 import Image from "next/image"
 import Link from "next/link"
 import AuthForm from "@/components/AuthForm"

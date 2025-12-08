@@ -1,4 +1,5 @@
 "use client"
+// File: app/notifications/page.tsx
 import React from "react"
 import { Button } from "@/components/ui/button"
 import { pushToast } from "@/components/ui/toast"

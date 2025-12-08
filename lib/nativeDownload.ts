@@ -1,3 +1,4 @@
+// File: lib/nativeDownload.ts
 // Behaviour: native download helper per README-upgrade.md. Detects Capacitor-native runtime and saves PDF blobs to
 // Documents/certificates/<file> via @capacitor/filesystem, then opens the system share/save sheet via @capacitor/share.
 // Manual test: on device build, tap "Download certificate" and confirm a share/save dialog appears with the PDF.

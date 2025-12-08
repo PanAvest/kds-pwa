@@ -1,3 +1,4 @@
+// File: ios/App/App/SplashViewController.swift
 import UIKit
 import WebKit
 import Capacitor

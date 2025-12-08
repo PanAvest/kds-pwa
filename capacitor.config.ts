@@ -1,3 +1,4 @@
+// File: capacitor.config.ts
 import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {

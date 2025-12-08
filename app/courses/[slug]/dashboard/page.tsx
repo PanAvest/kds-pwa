@@ -1,3 +1,4 @@
+// File: app/courses/[slug]/dashboard/page.tsx
 // app/courses/[slug]/dashboard/page.tsx
 "use client";
 export const dynamic = "force-dynamic";

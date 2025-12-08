@@ -1,3 +1,4 @@
+// File: next.config.js
 import withPWA from "next-pwa";
 import runtimeCaching from "next-pwa/cache.js";
 

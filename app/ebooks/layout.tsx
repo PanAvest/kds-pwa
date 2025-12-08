@@ -1,3 +1,4 @@
+// File: app/ebooks/layout.tsx
 // app/ebooks/layout.tsx
 export const dynamic = "force-dynamic";
 

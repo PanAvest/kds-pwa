@@ -1,3 +1,4 @@
+// File: app/head.tsx
 export default function Head() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const supabaseOrigin = supabaseUrl ? new URL(supabaseUrl).origin : "";

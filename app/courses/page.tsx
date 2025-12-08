@@ -1,3 +1,4 @@
+// File: app/courses/page.tsx
 // app/knowledge/page.tsx
 "use client";
 

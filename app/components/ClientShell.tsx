@@ -1,4 +1,5 @@
 "use client";
+// File: app/components/ClientShell.tsx
 
 import type { ReactNode } from "react";
 import ReadySignal from "../ReadySignal";

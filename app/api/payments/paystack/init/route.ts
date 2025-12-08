@@ -1,3 +1,4 @@
+// File: app/api/payments/paystack/init/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

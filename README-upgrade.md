@@ -1,3 +1,4 @@
+<!-- File: README-upgrade.md -->
 # KDS PWA Tech Notes — Interactive, Dashboard, Certificates, Native Downloads
 
 Canonical reference for how the PWA mirrors the main site (PanAvest) and how to upgrade without guessing. Focus areas: interactive courses, dashboard/data flow, certificates, and native app PDF downloads.
