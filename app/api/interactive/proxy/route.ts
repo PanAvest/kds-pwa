@@ -5,8 +5,12 @@ export const runtime = "edge";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const path = searchParams.get("path");
-    if (!path) return NextResponse.json({ error: "path required" }, { status: 400 });
+    let path = searchParams.get("path") || "";
+    if (!path)
+      return NextResponse.json({ error: "path required" }, { status: 400 });
+    if (!path.startsWith("/")) {
+      path = "/" + path;
+    }
 
     const url = `https://panavestkds.com${path}`;
 
@@ -15,15 +19,18 @@ export async function GET(req: Request) {
       redirect: "follow",
     });
 
-    const contentType = upstream.headers.get("content-type") || "application/octet-stream";
-    const buffer = await upstream.arrayBuffer();
+    const contentType =
+      upstream.headers.get("content-type") || "application/octet-stream";
+    const body = upstream.body;
 
-    return new NextResponse(buffer, {
+    return new Response(body, {
       status: upstream.status,
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "no-store",
         "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
         "X-PWA-Proxy": "1",
       },
     });

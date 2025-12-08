@@ -8,7 +8,11 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const courseId = body?.course_id;
-    if (!courseId) return NextResponse.json({ error: "course_id required" }, { status: 400 });
+    if (!courseId)
+      return NextResponse.json(
+        { error: "course_id required" },
+        { status: 400 }
+      );
 
     const admin = getSupabaseAdmin();
 
@@ -18,7 +22,8 @@ export async function POST(req: Request) {
       .eq("id", courseId)
       .maybeSingle();
 
-    if (!course) return NextResponse.json({ error: "Course not found" }, { status: 404 });
+    if (!course)
+      return NextResponse.json({ error: "Course not found" }, { status: 404 });
     if (course.delivery_mode !== "interactive") {
       return NextResponse.json({ error: "Not interactive" }, { status: 400 });
     }

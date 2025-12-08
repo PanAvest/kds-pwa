@@ -15,9 +15,18 @@ import { createServerClient } from "@/lib/supabaseServer";
 import { InteractiveDashboardClient } from "../InteractiveDashboardClient";
 
 type Params = { slug: string };
-type Course = { id: string; title: string | null; interactive_path: string | null; delivery_mode: string | null };
+type Course = {
+  id: string;
+  title: string | null;
+  interactive_path: string | null;
+  delivery_mode: string | null;
+};
 
-export default async function KnowledgeDashboardPage({ params }: { params: Params }) {
+export default async function KnowledgeDashboardPage({
+  params,
+}: {
+  params: Params;
+}) {
   const slug = params?.slug;
 
   const supabase = createServerClient(
@@ -52,7 +61,9 @@ export default async function KnowledgeDashboardPage({ params }: { params: Param
   if (error) {
     return (
       <main className="mx-auto max-w-screen-md px-4 py-8">
-        <p className="text-sm text-red-700">Error loading course: {error.message}</p>
+        <p className="text-sm text-red-700">
+          Error loading course: {error.message}
+        </p>
       </main>
     );
   }
@@ -68,7 +79,9 @@ export default async function KnowledgeDashboardPage({ params }: { params: Param
   return (
     <main className="mx-auto max-w-screen-md px-4 py-6">
       <h1 className="text-xl font-bold">Interactive course</h1>
-      <p className="text-sm text-muted">Knowledge dashboard interactive player.</p>
+      <p className="text-sm text-muted">
+        Knowledge dashboard interactive player.
+      </p>
 
       <InteractiveDashboardClient
         slug={slug}

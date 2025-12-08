@@ -3,6 +3,20 @@
 import { useEffect, useState } from "react";
 import { isNativeApp } from "@/lib/nativePlatform";
 
+function normalizePath(p: string) {
+  if (!p) return "";
+  if (p.startsWith("http")) {
+    try {
+      const u = new URL(p);
+      return u.pathname;
+    } catch {
+      return p;
+    }
+  }
+  if (!p.startsWith("/")) return "/" + p;
+  return p;
+}
+
 type InteractiveDashboardClientProps = {
   slug: string;
   title: string | null;
@@ -16,10 +30,15 @@ export function InteractiveDashboardClient({
   delivery_mode,
   interactive_path,
 }: InteractiveDashboardClientProps) {
-  const safeSrc = interactive_path
-    ? `/api/interactive/proxy?path=${encodeURIComponent(interactive_path)}`
+  const normalized = normalizePath(interactive_path || "");
+  const safeSrc = normalized
+    ? `/api/interactive/proxy?path=${encodeURIComponent(normalized)}`
     : null;
-  const [iframeStatus, setIframeStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+  const [iframeStatus, setIframeStatus] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
+
+  console.log("DEBUG interactive iframe URL:", safeSrc);
 
   useEffect(() => {
     if (safeSrc) {
@@ -65,10 +84,10 @@ export function InteractiveDashboardClient({
           <iframe
             src={safeSrc || ""}
             title={title ?? "Interactive knowledge"}
-            className="w-full h-[80vh] rounded-lg border"
+            className="w-full h-[90vh] rounded-lg border"
             referrerPolicy="no-referrer"
-            sandbox="allow-forms allow-same-origin allow-scripts allow-popups allow-downloads"
-            allow="fullscreen; autoplay; clipboard-write; *"
+            sandbox="allow-forms allow-same-origin allow-scripts allow-popups allow-downloads allow-top-navigation-by-user-activation"
+            allow="fullscreen; autoplay; clipboard-write;"
             onLoad={() => {
               setIframeStatus("loaded");
               if (isNativeApp()) {
