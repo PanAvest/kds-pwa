@@ -1,0 +1,91 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { isNativeApp } from "@/lib/nativePlatform";
+import { buildInteractiveSrc } from "./buildInteractiveSrc";
+
+type InteractiveDashboardClientProps = {
+  slug: string;
+  course: {
+    id: string;
+    title: string | null;
+    delivery_mode: string | null;
+    interactive_path: string | null;
+  } | null;
+};
+
+export function InteractiveDashboardClient({ slug, course }: InteractiveDashboardClientProps) {
+  const interactiveSrc = buildInteractiveSrc(course);
+  const [iframeStatus, setIframeStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+
+  useEffect(() => {
+    if (interactiveSrc) {
+      setIframeStatus("loading");
+    } else {
+      setIframeStatus("idle");
+    }
+  }, [interactiveSrc]);
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+
+    console.log("[KDS PWA interactive debug]", {
+      slug,
+      delivery_mode: course?.delivery_mode,
+      interactive_path: course?.interactive_path,
+      interactiveSrc,
+    });
+  }, [slug, course, interactiveSrc]);
+
+  return (
+    <div className="mt-3">
+      {isNativeApp() && (
+        <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-full bg-black/80 px-3 py-1 text-[11px] text-green-200">
+          <span className="font-semibold">[DEBUG]</span>
+          <span>iframeStatus: {iframeStatus}</span>
+          <span className="ml-2 truncate">
+            src: <code>{interactiveSrc || "null"}</code>
+          </span>
+        </div>
+      )}
+
+      {course?.delivery_mode !== "interactive" ? (
+        <div className="rounded-xl border border-[color:var(--color-light)] bg-white px-4 py-3 text-sm">
+          This knowledge module is not marked as interactive.
+        </div>
+      ) : !interactiveSrc ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          Interactive path is missing or invalid for this module.
+        </div>
+      ) : (
+        <div className="w-full rounded-2xl bg-white border border-light p-4">
+          <iframe
+            src={interactiveSrc}
+            title={course?.title ?? "Interactive knowledge"}
+            className="h-[70vh] w-full rounded-xl border border-[color:var(--color-light)] bg-black"
+            onLoad={() => {
+              setIframeStatus("loaded");
+              if (isNativeApp()) {
+                console.log("[KDS PWA interactive iframe] onLoad", {
+                  slug,
+                  interactiveSrc,
+                });
+              }
+            }}
+            onError={() => {
+              setIframeStatus("error");
+              if (isNativeApp()) {
+                console.log("[KDS PWA interactive iframe] onError", {
+                  slug,
+                  interactiveSrc,
+                });
+              }
+            }}
+            allow="accelerometer; autoplay; encrypted-media; fullscreen; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
+    </div>
+  );
+}
