@@ -4,7 +4,11 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabaseServer";
 
 export async function GET() {
-  const supabase = createServerClient();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { global: { fetch } }
+  );
   const { data, error } = await supabase
     .from("courses")
     .select("id, slug, title, price_cents, price, currency, published")

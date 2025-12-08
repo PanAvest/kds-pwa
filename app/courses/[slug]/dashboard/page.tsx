@@ -1,4 +1,7 @@
 // app/courses/[slug]/dashboard/page.tsx
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export { runtime, preferredRegion } from "@/app/edge-no-rsc";
 "use client";
 
 import Image from "next/image";
