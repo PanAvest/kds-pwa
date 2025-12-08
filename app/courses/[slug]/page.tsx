@@ -1,4 +1,6 @@
 // app/courses/[slug]/page.tsx
+// Debug note: isEnrolled on this page now mirrors Programs list/Dashboard by checking enrollments
+// via user_id + course_id (no slug join). Any enrollment row counts as access (same as elsewhere).
 "use client";
 
 import Image from "next/image";
@@ -59,7 +61,7 @@ export default function CoursePreviewPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!course) return;
+      if (!slug || !course?.id) return;
       const { data: { user } } = await supabase.auth.getUser();
       if (cancelled) return;
       if (!user) {
@@ -69,16 +71,29 @@ export default function CoursePreviewPage() {
       }
       const { data, error } = await supabase
         .from("enrollments")
-        .select("id")
+        .select("course_id")
         .eq("user_id", user.id)
         .eq("course_id", course.id)
         .maybeSingle();
       if (cancelled) return;
-      setEnrolled(!error && !!data);
+      const enrollment = data;
+      const isEnrolled = !error && !!data; // matches Programs list & Dashboard (any row = enrolled)
+      if (process.env.NODE_ENV !== "production" && isNativeApp()) {
+        console.log("[PROGRAM DETAIL DEBUG]", {
+          isNative: isNativeApp(),
+          slug,
+          courseId: course?.id,
+          userId: user?.id,
+          enrollment,
+          isEnrolled,
+          error,
+        });
+      }
+      setEnrolled(isEnrolled);
       setUserChecked(true);
     })();
     return () => { cancelled = true; };
-  }, [course]);
+  }, [slug, course?.id]);
 
   if (loading) {
     return (
