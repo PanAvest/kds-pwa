@@ -11,6 +11,7 @@ import { useParams, useRouter } from "next/navigation";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { supabase } from "@/lib/supabaseClient";
 import { InteractiveDashboardClient } from "../../../knowledge/[slug]/InteractiveDashboardClient";
+import { isNativeApp } from "@/lib/nativePlatform";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -194,6 +195,7 @@ export default function CourseDashboard() {
   const [notice, setNotice] = useState<string>("");
   const { isOffline, markOffline, markOnline } = useOfflineMonitor();
   const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [native, setNative] = useState(false);
   const [chaptersOpen, setChaptersOpen] = useState(false); // slide-over
   const initializedRef = useRef(false);
   const flagOfflineFromError = useCallback((err: unknown) => {
@@ -208,6 +210,14 @@ export default function CourseDashboard() {
   useEffect(() => {
     setIsOnline(!isOffline);
   }, [isOffline]);
+
+  useEffect(() => {
+    try {
+      setNative(isNativeApp());
+    } catch {
+      setNative(false);
+    }
+  }, []);
 
   /* ========= Auth ========= */
   useEffect(() => {
@@ -1050,6 +1060,48 @@ export default function CourseDashboard() {
                 )}
               </div>
 
+              {native && (
+                <div className="mt-3 grid grid-cols-3 gap-2 sm:hidden">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (canGoPrev) setActiveSlide(orderedSlides[activeIndex - 1]);
+                    }}
+                    disabled={!canGoPrev}
+                    className={`rounded-lg border px-3 py-3 text-sm ${
+                      canGoPrev ? "active:scale-[0.98]" : "opacity-50 cursor-not-allowed"
+                    }`}
+                  >
+                    Prev
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => markDone(activeSlide)}
+                    className="rounded-lg bg-[color:#0a1156] text-white px-3 py-3 text-sm font-semibold active:scale-[0.98]"
+                  >
+                    Done
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (canGoNext) {
+                        setActiveSlide(orderedSlides[activeIndex + 1]);
+                      } else {
+                        setNotice("Complete this slide or the chapter quiz first.");
+                      }
+                    }}
+                    disabled={!canGoNext}
+                    className={`rounded-lg border px-3 py-3 text-sm ${
+                      canGoNext ? "active:scale-[0.98]" : "opacity-50 cursor-not-allowed"
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+
               {!!notice && (
                 <div role="status" aria-live="polite" className="mt-3 text-xs md:text-sm text-[#0a1156]">
                   {notice}
@@ -1063,7 +1115,7 @@ export default function CourseDashboard() {
       </div>
 
       {/* Sticky Bottom Action Bar (mobile) */}
-      {activeSlide && (
+      {activeSlide && !native && (
         <div className="sm:hidden fixed inset-x-0 bottom-0 z-40 bg-white/95 backdrop-blur border-t border-[color:var(--color-light)]">
           <div className="mx-auto max-w-screen-2xl px-4 py-2 grid grid-cols-3 gap-2">
             <button
@@ -1417,6 +1469,8 @@ export default function CourseDashboard() {
           </div>
         </div>
       )}
+
+      {native && <div className="h-6" />}
     </div>
   );
 }
