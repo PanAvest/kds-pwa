@@ -70,7 +70,12 @@ export default async function KnowledgeDashboardPage({ params }: { params: Param
       <h1 className="text-xl font-bold">Interactive course</h1>
       <p className="text-sm text-muted">Knowledge dashboard interactive player.</p>
 
-      <InteractiveDashboardClient slug={slug} course={course} />
+      <InteractiveDashboardClient
+        slug={slug}
+        title={course.title}
+        delivery_mode={course.delivery_mode}
+        interactive_path={course.interactive_path ?? null}
+      />
     </main>
   );
 }
