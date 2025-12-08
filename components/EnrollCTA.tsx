@@ -43,6 +43,14 @@ export default function EnrollCTA({ courseId, slug, className, readerMode }: Pro
   );
 
   useEffect(() => {
+    try {
+      setNative(isNativeApp());
+    } catch {
+      setNative(false);
+    }
+  }, []);
+
+  useEffect(() => {
     let alive = true;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -136,10 +144,3 @@ export default function EnrollCTA({ courseId, slug, className, readerMode }: Pro
     </Link>
   );
 }
-  useEffect(() => {
-    try {
-      setNative(isNativeApp());
-    } catch {
-      setNative(false);
-    }
-  }, []);
