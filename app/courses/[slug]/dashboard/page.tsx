@@ -1,8 +1,8 @@
 // app/courses/[slug]/dashboard/page.tsx
+"use client";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export { runtime, preferredRegion } from "@/app/edge-no-rsc";
-"use client";
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";

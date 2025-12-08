@@ -2,10 +2,10 @@
 // quiz history, issued + provisional certificates with verify URLs, and download flow that splits web (jsPDF.save)
 // vs native (Filesystem + Share). Manual test: check cert cards render with QR verify link, download works in browser
 // and opens share sheet on device, provisional appears after 100% slides + passed exam without a certificate row.
+"use client";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export { runtime, preferredRegion } from "@/app/edge-no-rsc";
-"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
