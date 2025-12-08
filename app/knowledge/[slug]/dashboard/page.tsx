@@ -9,7 +9,7 @@
 // (client component) to surface URL + load/error state inside the native shell.
 
 import { supabase } from "@/lib/supabaseClient";
-import { InteractiveDashboardClient } from "./InteractiveDashboardClient";
+import { InteractiveDashboardClient } from "../InteractiveDashboardClient";
 
 type Params = { slug: string };
 type Course = { id: string; title: string | null; interactive_path: string | null; delivery_mode: string | null };
