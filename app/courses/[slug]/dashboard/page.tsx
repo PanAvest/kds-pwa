@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { supabase } from "@/lib/supabaseClient";
+import { InteractiveDashboardClient } from "../../../knowledge/[slug]/InteractiveDashboardClient";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -29,7 +30,14 @@ function ProgressBar({ value = 0 }: { value: number }) {
 }
 
 /* ========================= Types ========================= */
-type Course = { id: string; slug: string; title: string; img: string | null };
+type Course = {
+  id: string;
+  slug: string;
+  title: string;
+  img: string | null;
+  delivery_mode: string | null;
+  interactive_path: string | null;
+};
 type Chapter = { id: string; title: string; order_index: number; intro_video_url: string | null };
 type Slide = {
   id: string;
@@ -226,7 +234,7 @@ export default function CourseDashboard() {
       // course
       const { data: c } = await supabase
         .from("courses")
-        .select("id,slug,title,img")
+        .select("id,slug,title,img,delivery_mode,interactive_path")
         .eq("slug", String(slug))
         .maybeSingle<Course>();
       if (!c) { router.push("/courses"); return; }
@@ -877,6 +885,18 @@ export default function CourseDashboard() {
           <li>Copying/printing is disabled during the test.</li>
         </ul>
       </div>
+
+      {/* Interactive Storyline iframe (for interactive programs) */}
+      {course.delivery_mode === "interactive" && (
+        <div className="mb-6">
+          <InteractiveDashboardClient
+            slug={course.slug}
+            title={course.title}
+            deliveryMode={course.delivery_mode}
+            interactivePath={course.interactive_path}
+          />
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         {/* Sidebar (desktop) */}
