@@ -3,61 +3,79 @@
 import { useEffect, useState } from "react";
 import { isNativeApp } from "@/lib/nativePlatform";
 
-function normalizePath(p: string) {
-  if (!p) return "";
-  if (p.startsWith("http")) {
-    try {
-      const u = new URL(p);
-      return u.pathname;
-    } catch {
-      return p;
-    }
+function normalizeInteractivePath(
+  path: string | null | undefined
+): string | null {
+  if (!path) return null;
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
   }
-  if (!p.startsWith("/")) return "/" + p;
-  return p;
+
+  let normalizedPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+
+  if (!normalizedPath.includes(".html")) {
+    if (!normalizedPath.endsWith("/")) {
+      normalizedPath = `${normalizedPath}/`;
+    }
+    normalizedPath = `${normalizedPath}story_html5.html`;
+  }
+
+  const origin =
+    process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN?.replace(/\/+$/, "") ||
+    "https://www.panavestkds.com";
+
+  return `${origin}${normalizedPath}`;
 }
 
 type InteractiveDashboardClientProps = {
   slug: string;
   title: string | null;
-  delivery_mode: string | null;
-  interactive_path: string | null;
+  deliveryMode: string | null;
+  interactivePath: string | null;
 };
 
 export function InteractiveDashboardClient({
   slug,
   title,
-  delivery_mode,
-  interactive_path,
+  deliveryMode,
+  interactivePath,
 }: InteractiveDashboardClientProps) {
-  const normalized = normalizePath(interactive_path || "");
-  const safeSrc = normalized
-    ? `/api/interactive/proxy?path=${encodeURIComponent(normalized)}`
-    : null;
+  const interactiveUrl = normalizeInteractivePath(interactivePath);
   const [iframeStatus, setIframeStatus] = useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
 
-  console.log("DEBUG interactive iframe URL:", safeSrc);
+  if (process.env.NODE_ENV !== "production") {
+    console.log("DEBUG interactive iframe URL:", interactiveUrl, {
+      slug,
+      deliveryMode,
+      interactivePath,
+      isNative: isNativeApp(),
+    });
+  }
 
   useEffect(() => {
-    if (safeSrc) {
+    if (interactiveUrl) {
       setIframeStatus("loading");
     } else {
       setIframeStatus("idle");
     }
-  }, [safeSrc]);
+  }, [interactiveUrl]);
 
   useEffect(() => {
     if (!isNativeApp()) return;
 
     console.log("[KDS PWA interactive debug]", {
       slug,
-      delivery_mode,
-      interactive_path,
-      interactiveSrc: safeSrc,
+      delivery_mode: deliveryMode,
+      interactive_path: interactivePath,
+      interactiveUrl,
+      isNative: isNativeApp(),
     });
-  }, [slug, delivery_mode, interactive_path, safeSrc]);
+  }, [slug, deliveryMode, interactivePath, interactiveUrl]);
 
   return (
     <div className="mt-3">
@@ -66,34 +84,37 @@ export function InteractiveDashboardClient({
           <span className="font-semibold">[DEBUG]</span>
           <span>iframeStatus: {iframeStatus}</span>
           <span className="ml-2 truncate">
-            src: <code>{safeSrc || "null"}</code>
+            src: <code>{interactiveUrl || "null"}</code>
           </span>
         </div>
       )}
 
-      {delivery_mode !== "interactive" ? (
+      {deliveryMode !== "interactive" ? (
         <div className="rounded-xl border border-[color:var(--color-light)] bg-white px-4 py-3 text-sm">
           This knowledge module is not marked as interactive.
         </div>
-      ) : !safeSrc ? (
+      ) : !interactiveUrl ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          Interactive path is missing or invalid for this module.
+          This interactive program is not yet configured. Please contact
+          support.
         </div>
       ) : (
         <div className="w-full rounded-2xl bg-white border border-light p-4">
           <iframe
-            src={safeSrc || ""}
+            src={interactiveUrl}
             title={title ?? "Interactive knowledge"}
-            className="w-full h-[90vh] rounded-lg border"
+            className="w-full"
+            style={{ border: "none", minHeight: "70vh" }}
             referrerPolicy="no-referrer"
-            sandbox="allow-forms allow-same-origin allow-scripts allow-popups allow-downloads allow-top-navigation-by-user-activation"
-            allow="fullscreen; autoplay; clipboard-write;"
+            sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-downloads"
+            allow="fullscreen; autoplay"
+            allowFullScreen
             onLoad={() => {
               setIframeStatus("loaded");
               if (isNativeApp()) {
                 console.log("[KDS PWA interactive iframe] onLoad", {
                   slug,
-                  interactiveSrc: safeSrc,
+                  interactiveUrl,
                 });
               }
             }}
@@ -102,7 +123,7 @@ export function InteractiveDashboardClient({
               if (isNativeApp()) {
                 console.log("[KDS PWA interactive iframe] onError", {
                   slug,
-                  interactiveSrc: safeSrc,
+                  interactiveUrl,
                 });
               }
             }}

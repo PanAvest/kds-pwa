@@ -86,8 +86,8 @@ export default async function KnowledgeDashboardPage({
       <InteractiveDashboardClient
         slug={slug}
         title={course.title}
-        delivery_mode={course.delivery_mode}
-        interactive_path={course.interactive_path ?? null}
+        deliveryMode={course.delivery_mode}
+        interactivePath={course.interactive_path}
       />
     </main>
   );
