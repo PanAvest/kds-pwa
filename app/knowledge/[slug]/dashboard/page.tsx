@@ -8,7 +8,7 @@
 // DEBUG: interactive iframe debug is handled by InteractiveDashboardClient
 // (client component) to surface URL + load/error state inside the native shell.
 
-import { supabase } from "@/lib/supabaseClient";
+import { createServerClient } from "@/lib/supabaseServer";
 import { InteractiveDashboardClient } from "../InteractiveDashboardClient";
 
 type Params = { slug: string };
@@ -16,6 +16,8 @@ type Course = { id: string; title: string | null; interactive_path: string | nul
 
 export default async function KnowledgeDashboardPage({ params }: { params: Params }) {
   const slug = params?.slug;
+
+  const supabase = createServerClient();
 
   const { data, error } = await supabase
     .from("courses")

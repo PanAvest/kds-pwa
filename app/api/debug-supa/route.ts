@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseClient";
+import { createServerClient } from "@/lib/supabaseServer";
 
 export async function GET() {
+  const supabase = createServerClient();
   const { data, error } = await supabase
     .from("courses")
     .select("id, slug, title, price_cents, price, currency, published")
