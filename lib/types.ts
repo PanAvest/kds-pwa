@@ -9,6 +9,7 @@ export type Course = {
   cpd_points: number
   img?: string
   published: boolean
+  coming_soon?: boolean | null
 }
 
 export type Ebook = {

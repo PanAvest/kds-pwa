@@ -16,6 +16,7 @@ type CourseRow = {
   price_cents?: number | null;
   price?: number | null;
   currency?: string | null;
+  coming_soon?: boolean | null;
 };
 
 type Course = {
@@ -24,6 +25,7 @@ type Course = {
   title: string;
   price_cents: number; // minor units
   currency: string;
+  coming_soon?: boolean | null;
 };
 
 export default function EnrollPage() {
@@ -67,7 +69,7 @@ export default function EnrollPage() {
       // Select both names; DB returns the ones that exist
       const { data, error } = await supabase
         .from("courses")
-        .select("id,slug,title,price_cents,price,currency")
+        .select("id,slug,title,price_cents,price,currency,coming_soon")
         .eq("slug", slug)
         .maybeSingle<CourseRow>();
 
@@ -89,6 +91,7 @@ export default function EnrollPage() {
         title: data.title,
         price_cents: minor,
         currency: (data.currency ?? "GHS").toUpperCase(),
+        coming_soon: data.coming_soon ?? false,
       });
     })();
   }, [slug, router]);

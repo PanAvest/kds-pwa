@@ -16,6 +16,7 @@ type Course = {
   img: string | null
   cpd_points: number | null
   published: boolean | null
+  coming_soon?: boolean | null
 }
 
 type Ebook = {
@@ -33,6 +34,10 @@ const BRAND = {
 }
 
 const safeSrc = (src?: string | null) => (src && src.trim() ? src : "/icon-512.png")
+const normalizeCourse = (c: any): Course => ({
+  ...c,
+  coming_soon: c?.coming_soon ?? false,
+})
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([])
@@ -68,7 +73,7 @@ export default function HomePage() {
         const [coursesRes, ebooksRes] = await Promise.allSettled([
           supabase
             .from("courses")
-            .select("id, slug, title, description, img, cpd_points, published, created_at")
+            .select("id, slug, title, description, img, cpd_points, published, created_at, coming_soon")
             .eq("published", true)
             .order("created_at", { ascending: false })
             .limit(6),
@@ -83,7 +88,7 @@ export default function HomePage() {
         if (!alive) return
 
         if (coursesRes.status === "fulfilled") {
-          setCourses((coursesRes.value.data ?? []) as Course[])
+          setCourses(((coursesRes.value.data ?? []) as any[]).map(normalizeCourse))
         } else {
           console.error("Failed to load courses", coursesRes.status === "rejected" ? coursesRes.reason : "unknown")
           setCourses([])

@@ -38,6 +38,7 @@ type Course = {
   img: string | null;
   delivery_mode: string | null;
   interactive_path: string | null;
+  coming_soon?: boolean | null;
 };
 type Chapter = { id: string; title: string; order_index: number; intro_video_url: string | null };
 type Slide = {
@@ -244,11 +245,11 @@ export default function CourseDashboard() {
       // course
       const { data: c } = await supabase
         .from("courses")
-        .select("id,slug,title,img,delivery_mode,interactive_path")
+        .select("id,slug,title,img,delivery_mode,interactive_path,coming_soon")
         .eq("slug", String(slug))
         .maybeSingle<Course>();
       if (!c) { router.push("/courses"); return; }
-      setCourse(c);
+      setCourse({ ...c, coming_soon: c.coming_soon ?? false });
 
       // paywall: enrollment must be paid
       const { data: enr, error: enrErr } = await supabase

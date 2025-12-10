@@ -22,7 +22,12 @@ type Course = {
   price: number | null;
   cpd_points: number | null;
   published: boolean | null;
+  coming_soon?: boolean | null;
 };
+const normalizeCourse = (c: any): Course => ({
+  ...c,
+  coming_soon: c?.coming_soon ?? false,
+});
 
 export default function CoursePreviewPage() {
   const params = useParams<{ slug: string }>();
@@ -50,14 +55,14 @@ export default function CoursePreviewPage() {
       try {
         const { data, error } = await supabase
           .from("courses")
-          .select("id,slug,title,description,img,price,cpd_points,published")
+          .select("id,slug,title,description,img,price,cpd_points,published,coming_soon")
           .eq("slug", slug)
           .maybeSingle<Course>();
         if (cancelled) return;
         if (error || !data || data.published !== true) {
           setCourse(null);
         } else {
-          setCourse(data);
+          setCourse(normalizeCourse(data));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -124,6 +129,7 @@ export default function CoursePreviewPage() {
 
   const nativeLocked = native && userChecked && !enrolled;
   const nativeEnrolled = native && userChecked && enrolled;
+  const comingSoon = course.coming_soon === true;
 
   return (
     <NoInternet>
@@ -143,6 +149,11 @@ export default function CoursePreviewPage() {
             </div>
             <div className="p-5">
               <h1 className="text-2xl font-semibold">{course.title}</h1>
+              {comingSoon && (
+                <div className="mt-2 inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
+                  Coming soon
+                </div>
+              )}
               {course.description && (
                 <p className="mt-2 text-[var(--color-text-muted)]">{course.description}</p>
               )}
@@ -163,7 +174,16 @@ export default function CoursePreviewPage() {
               CPPD: <b>{course.cpd_points ?? 0}</b>
             </div>
 
-            {native ? (
+            {comingSoon ? (
+              <div className="mt-5 space-y-2 text-sm text-[color:var(--color-text-muted)]">
+                <div className="rounded-lg bg-[color:var(--color-light)]/60 px-4 py-3 font-semibold text-[color:var(--color-text-dark)]">
+                  Coming soon – enrollment not available
+                </div>
+                <div className="text-xs">
+                  This program will be available soon. Check back later for enrollment.
+                </div>
+              </div>
+            ) : native ? (
               <div className="mt-5 space-y-3 text-sm text-muted">
                 {!userChecked && (
                   <div className="rounded-lg bg-[color:var(--color-light)]/60 p-3">
@@ -200,7 +220,7 @@ export default function CoursePreviewPage() {
             ) : (
               <>
                 <EnrollCTA courseId={course.id} slug={course.slug} className="mt-5 w-full text-center block" />
-                <div className="mt-4 text-xs text-[var(--color-text-muted)]">
+                <div className="mt-4 text-xs text-[color:var(--color-text-muted)]">
                   One-time payment. Access tied to your account.
                 </div>
               </>

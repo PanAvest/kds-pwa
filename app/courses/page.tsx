@@ -17,9 +17,14 @@ type Course = {
   cpd_points: number | null;
   published: boolean | null;
   created_at?: string | null;
+  coming_soon?: boolean | null;
 };
 
 const safeSrc = (src?: string | null) => (src && src.trim() ? src : "/icon-512.png");
+const normalizeCourse = (c: any): Course => ({
+  ...c,
+  coming_soon: c?.coming_soon ?? false,
+});
 
 export default function KnowledgePage() {
   const [all, setAll] = useState<Course[]>([]);
@@ -48,22 +53,22 @@ export default function KnowledgePage() {
           }
           const { data, error } = await supabase
             .from("enrollments")
-            .select("course:course_id(id,slug,title,description,img,cpd_points,published,created_at)")
+            .select("course:course_id(id,slug,title,description,img,cpd_points,published,created_at,coming_soon)")
             .eq("user_id", user.id);
           if (!alive) return;
           if (error || !data) { setAll([]); return; }
           const mapped = (data ?? [])
-            .map((row: any) => row.course)
+            .map((row: any) => (row?.course ? normalizeCourse(row.course) : null))
             .filter(Boolean) as Course[];
           setAll(mapped);
         } else {
           const { data } = await supabase
             .from("courses")
-            .select("id,slug,title,description,img,cpd_points,published,created_at")
+            .select("id,slug,title,description,img,cpd_points,published,created_at,coming_soon")
             .eq("published", true)
             .order("created_at", { ascending: false });
           if (!alive) return;
-          setAll((data ?? []) as Course[]);
+          setAll(((data ?? []) as any[]).map(normalizeCourse));
         }
       } finally {
         if (alive) setLoading(false);

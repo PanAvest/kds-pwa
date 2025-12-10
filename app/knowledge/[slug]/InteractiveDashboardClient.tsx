@@ -3,45 +3,61 @@
 import { useEffect, useMemo, useState } from "react";
 import { isNativeApp } from "@/lib/nativePlatform";
 
-// Canonical origin for main site Storyline content
+type InteractiveDebugInfo = {
+  ok?: boolean;
+  status?: number;
+  statusText?: string;
+  contentType?: string | null;
+  finalUrl?: string;
+  mainOrigin?: string;
+  raw?: string | null;
+  relative?: string | null;
+  absolute?: string | null;
+  reason?: string;
+  error?: string;
+};
+
 const MAIN_ORIGIN = (
   process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://panavestkds.com"
 ).replace(/\/+$/, "");
 
-/**
- * Build a single absolute Storyline URL from whatever is stored in interactive_path.
- *
- * Accepts:
- *  - Full URLs: https://panavestkds.com/interactive/...
- *  - Relative paths: /interactive/ghie-business-ethics/ or interactive/ghie-business-ethics/
- *  - Direct HTML: /interactive/ghie-business-ethics/story_html5.html
- *
- * Always returns a full absolute URL pointing at story_html5.html under MAIN_ORIGIN.
- */
-function buildInteractiveUrl(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-
-  let trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  // If admin already stored a full URL, use it directly.
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
+function buildInteractivePaths(raw: string | null | undefined) {
+  if (!raw) {
+    return { relative: null as string | null, absolute: null as string | null };
   }
 
-  // Treat as a path off the main origin.
+  let trimmed = raw.trim();
+  if (!trimmed) {
+    return { relative: null, absolute: null };
+  }
+
+  // If admin already stored a full URL, just use it as-is
+  if (/^https?:\/\//i.test(trimmed)) {
+    return { relative: trimmed, absolute: trimmed };
+  }
+
+  // Treat as a relative path from the main site root
   if (!trimmed.startsWith("/")) {
     trimmed = `/${trimmed}`;
   }
 
-  // If there is no *.html at the end, assume a folder and append Storyline's main HTML file.
+  // If they gave a folder, default to Storyline's main HTML
   const hasHtml = /\.html?$/i.test(trimmed);
+  let relativePath = trimmed;
   if (!hasHtml) {
-    if (!trimmed.endsWith("/")) trimmed += "/";
-    trimmed += "story_html5.html";
+    // e.g. /interactive/boardroom-governance -> /interactive/boardroom-governance/story_html5.html
+    if (!relativePath.endsWith("/")) {
+      relativePath = `${relativePath}/`;
+    }
+    relativePath = `${relativePath}story_html5.html`;
   }
 
-  return `${MAIN_ORIGIN}${trimmed}`;
+  const absoluteUrl = `${MAIN_ORIGIN}${relativePath}`;
+
+  return {
+    relative: relativePath,
+    absolute: absoluteUrl,
+  };
 }
 
 type InteractiveDashboardClientProps = {
@@ -62,12 +78,29 @@ export function InteractiveDashboardClient({
     "idle" | "loading" | "loaded" | "error"
   >("idle");
 
-  // Decide final iframe src (same for web + native -> no proxy)
-  const iframeSrc = useMemo(
-    () => buildInteractiveUrl(interactivePath),
+  const [debugInfo, setDebugInfo] = useState<InteractiveDebugInfo | null>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+
+  const { relative, absolute } = useMemo(
+    () => buildInteractivePaths(interactivePath),
     [interactivePath]
   );
 
+  // Decide what src the iframe should use
+  const iframeSrc = useMemo(() => {
+    if (!relative || !absolute) return null;
+
+    // On native shells, always go through the proxy so origin is kds-pwa
+    if (native) {
+      const encoded = encodeURIComponent(relative);
+      return `/api/interactive/proxy?path=${encoded}`;
+    }
+
+    // On web/PWA, hit the main site directly
+    return absolute;
+  }, [native, relative, absolute]);
+
+  // Detect native shell
   useEffect(() => {
     try {
       setNative(isNativeApp());
@@ -76,6 +109,7 @@ export function InteractiveDashboardClient({
     }
   }, []);
 
+  // Track iframe loading state
   useEffect(() => {
     if (iframeSrc) {
       setIframeStatus("loading");
@@ -84,60 +118,142 @@ export function InteractiveDashboardClient({
     }
   }, [iframeSrc]);
 
-  // iOS zoom-prevention injection inside the Storyline iframe
+  // Hit debug API to test upstream Storyline URL
   useEffect(() => {
-    if (iframeStatus !== "loaded") return;
+    let cancelled = false;
 
-    const iframeEl = document.querySelector("iframe");
-    if (!iframeEl) return;
-
-    try {
-      const doc = iframeEl.contentDocument;
-      const style = doc.createElement("style");
-      style.innerHTML = `
-      input, textarea, select {
-        font-size: 16px !important;
-        -webkit-text-size-adjust: 100% !important;
-      }
-    `;
-      doc.head.appendChild(style);
-    } catch (err) {
-      console.log("No-zoom CSS injection skipped (cross-origin)", err);
+    if (!interactivePath) {
+      setDebugInfo(null);
+      return;
     }
-  }, [iframeStatus]);
 
-  const showDebug = native || process.env.NODE_ENV !== "production";
+    (async () => {
+      try {
+        setDebugLoading(true);
+        const res = await fetch(
+          `/api/interactive/debug?path=${encodeURIComponent(interactivePath)}`,
+          { cache: "no-store" }
+        );
+        const json = await res.json();
+        if (!cancelled) {
+          setDebugInfo(json);
+        }
 
+        if (!cancelled && process.env.NODE_ENV !== "production") {
+          console.log("[KDS interactive debug API]", json);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setDebugInfo({
+            ok: false,
+            error: (e as Error).message,
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setDebugLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interactivePath]);
+
+  useEffect(() => {
+    function onInteractivePing(e: any) {
+      console.log("[KDS Interactive] Progress ping:", e.detail);
+
+      // Optional: You may connect this to Supabase in the future,
+      // e.g. to auto-mark the slide as opened.
+    }
+
+    window.addEventListener("interactive-progress", onInteractivePing);
+    return () => window.removeEventListener("interactive-progress", onInteractivePing);
+  }, []);
+
+  // Console debug
   if (process.env.NODE_ENV !== "production") {
     console.log("[KDS interactive debug]", {
       slug,
       deliveryMode,
       interactivePath,
+      relative,
+      absolute,
       iframeSrc,
       isNative: native,
-      iframeStatus,
     });
   }
 
+  useEffect(() => {
+    if (!native) return;
+    console.log("[KDS PWA interactive native debug]", {
+      slug,
+      deliveryMode,
+      interactivePath,
+      relative,
+      absolute,
+      iframeSrc,
+    });
+  }, [slug, deliveryMode, interactivePath, relative, absolute, iframeSrc, native]);
+
   return (
     <div className="mt-3">
-      {/* Debug panel (always visible in native shell, dev-only on web) */}
-      {showDebug && (
-        <div className="mb-3 inline-flex max-w-full flex-col gap-1 rounded-xl bg-black/85 px-3 py-2 text-[10px] text-green-200">
+      {/* Debug panel: always visible on native; dev-only on web */}
+      {(process.env.NODE_ENV !== "production" || native) && (
+        <div className="mb-3 rounded-xl bg-slate-900 text-[10px] text-slate-100 p-3 space-y-1">
           <div className="flex items-center justify-between gap-2">
             <span className="font-semibold">[INTERACTIVE DEBUG PANEL]</span>
             <span>
-              iframeStatus:{" "}
-              <span className="font-semibold">{iframeStatus}</span>
+              iframeStatus: <b>{iframeStatus}</b>
             </span>
           </div>
-          <div>slug: {slug}</div>
-          <div>deliveryMode: {deliveryMode ?? "null"}</div>
-          <div>NODE_ENV: {process.env.NODE_ENV}</div>
-          <div>native shell: {native ? "true" : "false"}</div>
-          <div>DB interactivePath: {interactivePath || "null"}</div>
-          <div>MAIN_ORIGIN: {MAIN_ORIGIN}</div>
-          <div>iframeSrc: {iframeSrc || "null"}</div>
+          <div>slug: <code>{slug}</code></div>
+          <div>deliveryMode: <code>{deliveryMode || "null"}</code></div>
+          <div>NODE_ENV: <code>{process.env.NODE_ENV}</code></div>
+          <div>native shell: <code>{String(native)}</code></div>
+          <div>
+            DB interactivePath: <code>{interactivePath || "null"}</code>
+          </div>
+          <div>
+            MAIN_ORIGIN: <code>{debugInfo?.mainOrigin || MAIN_ORIGIN}</code>
+          </div>
+          <div>
+            normalized relative: <code>{debugInfo?.relative || relative || "null"}</code>
+          </div>
+          <div className="truncate">
+            normalized absolute: <code>{debugInfo?.absolute || absolute || "null"}</code>
+          </div>
+          <div className="truncate">
+            iframeSrc: <code>{iframeSrc || "null"}</code>
+          </div>
+          <div>
+            upstream status:{" "}
+            {debugLoading
+              ? "loading…"
+              : `${debugInfo?.status ?? "?"} ${debugInfo?.statusText ?? ""}`}
+          </div>
+          <div>
+            upstream ok:{" "}
+            {debugInfo?.ok === undefined ? "?" : String(debugInfo.ok)}
+          </div>
+          <div>
+            content-type: <code>{debugInfo?.contentType || "n/a"}</code>
+          </div>
+          <div className="truncate">
+            finalUrl: <code>{debugInfo?.finalUrl || "n/a"}</code>
+          </div>
+          {debugInfo?.reason && (
+            <div className="text-amber-300">
+              reason: {debugInfo.reason}
+            </div>
+          )}
+          {debugInfo?.error && (
+            <div className="text-red-300">
+              error: {debugInfo.error}
+            </div>
+          )}
         </div>
       )}
 
@@ -147,42 +263,38 @@ export function InteractiveDashboardClient({
         </div>
       ) : !iframeSrc ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          This interactive program is not yet configured. Please contact
-          support.
+          This interactive program is not yet configured. Please contact support.
         </div>
       ) : (
         <div className="w-full rounded-2xl bg-white border border-[color:var(--color-light)] p-4">
-          {/* Loading spinner */}
-          {iframeStatus === "loading" && (
-            <div className="w-full py-10 flex justify-center">
-              <div className="animate-spin h-10 w-10 rounded-full border-4 border-blue-600 border-t-transparent"></div>
-            </div>
-          )}
-
-          {/* Fade-in iframe */}
-          <div
-            className="w-full transition-opacity duration-300"
-            style={{ opacity: iframeStatus === "loaded" ? 1 : 0 }}
-          >
-            <iframe
-              src={iframeSrc}
-              title={title ?? "Interactive knowledge"}
-              className="w-full"
-              style={{ border: "none", minHeight: "80vh" }}
-              referrerPolicy="no-referrer"
-              sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-downloads"
-              allow="fullscreen; autoplay"
-              allowFullScreen
-              onLoad={() => {
-                setIframeStatus("loaded");
-                console.log("[KDS Interactive] iframe loaded");
-              }}
-              onError={() => {
-                setIframeStatus("error");
-                console.log("[KDS Interactive] iframe error");
-              }}
-            />
-          </div>
+          <iframe
+            src={iframeSrc}
+            title={title ?? "Interactive knowledge"}
+            className="w-full"
+            style={{ border: "none", minHeight: "70vh" }}
+            referrerPolicy="no-referrer"
+            sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-downloads"
+            allow="fullscreen; autoplay"
+            allowFullScreen
+            onLoad={() => {
+              setIframeStatus("loaded");
+              if (native) {
+                console.log("[KDS PWA interactive iframe] onLoad", {
+                  slug,
+                  iframeSrc,
+                });
+              }
+            }}
+            onError={() => {
+              setIframeStatus("error");
+              if (native) {
+                console.log("[KDS PWA interactive iframe] onError", {
+                  slug,
+                  iframeSrc,
+                });
+              }
+            }}
+          />
         </div>
       )}
     </div>

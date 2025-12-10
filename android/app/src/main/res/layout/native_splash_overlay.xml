@@ -14,21 +14,42 @@
 
         <ImageView
             android:id="@+id/native_splash_logo"
-            android:layout_width="200dp"
-            android:layout_height="200dp"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginBottom="24dp"
             android:adjustViewBounds="true"
             android:contentDescription="@string/app_name"
             android:scaleType="fitCenter"
-            android:src="@drawable/splash" />
+            android:src="@mipmap/ic_launcher" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Knowledge Development Series"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#222222"
+            android:gravity="center"
+            android:layout_marginBottom="16dp"/>
 
         <ProgressBar
             android:id="@+id/native_splash_progress"
-            style="?android:attr/progressBarStyleLarge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="160dp"
+            android:layout_height="4dp"
+            android:layout_marginBottom="16dp"
+            android:progressTint="#B65437"
             android:indeterminate="true"
             android:indeterminateTint="#B65437"
             android:indeterminateTintMode="src_in" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Powered by PanAvest International &amp; Partners"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:gravity="center" />
+            
     </LinearLayout>
 </FrameLayout>

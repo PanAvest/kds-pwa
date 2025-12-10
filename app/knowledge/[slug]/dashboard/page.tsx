@@ -21,6 +21,7 @@ type Course = {
   title: string | null;
   interactive_path: string | null;
   delivery_mode: string | null;
+  coming_soon?: boolean | null;
 };
 
 export default async function KnowledgeDashboardPage({
@@ -38,7 +39,7 @@ export default async function KnowledgeDashboardPage({
 
   const { data, error } = await supabase
     .from("courses")
-    .select("id,title,interactive_path,delivery_mode")
+    .select("id,title,interactive_path,delivery_mode,coming_soon")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -48,6 +49,7 @@ export default async function KnowledgeDashboardPage({
         title: data.title ?? null,
         interactive_path: data.interactive_path ?? null,
         delivery_mode: data.delivery_mode ?? null,
+        coming_soon: data.coming_soon ?? false,
       }
     : null;
 
