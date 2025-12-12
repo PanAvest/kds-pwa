@@ -12,6 +12,7 @@ import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { supabase } from "@/lib/supabaseClient";
 import { InteractiveDashboardClient } from "../../../knowledge/[slug]/InteractiveDashboardClient";
 import { isNativeApp } from "@/lib/nativePlatform";
+import PdfPageViewer from "@/components/pdf/PdfPageViewer";
 
 /* ------------------------------------------------------------------ */
 /* Optional: if you already have "@/components/ProgressBar",           */
@@ -103,6 +104,11 @@ function secondsToClock(s: number) {
   return `${m}:${String(ss).padStart(2, "0")}`;
 }
 const progressKey = (userId: string, courseId: string) => `pv.progress.${userId}.${courseId}`;
+const isPdfUrl = (url?: string | null) => {
+  if (!url) return false;
+  const stripped = url.split("#")[0]?.split("?")[0] ?? "";
+  return stripped.toLowerCase().endsWith(".pdf");
+};
 
 /* ====================== Media Player ====================== */
 function VideoPlayer({
@@ -999,33 +1005,47 @@ export default function CourseDashboard() {
 
               {/* Media */}
               {(() => {
-                const video = activeSlide.video_url ?? activeSlide.intro_video_url ?? null;
-                if (video) return <div className="mt-3"><VideoPlayer src={video} poster={null} /></div>;
-                if (activeSlide.asset_url) {
-                  const lower = activeSlide.asset_url.toLowerCase();
-                  const isImg = [".jpg",".jpeg",".png",".gif",".webp"].some(ext => lower.endsWith(ext));
-                  if (isImg) {
-                    return (
-                      <div className="mt-3">
+                const video = activeSlide.intro_video_url ?? activeSlide.video_url ?? null;
+                const asset = activeSlide.asset_url ?? null;
+                const isPdf = isPdfUrl(asset);
+                const lower = asset?.toLowerCase() ?? "";
+                const isImg = asset ? [".jpg", ".jpeg", ".png", ".gif", ".webp"].some(ext => lower.endsWith(ext)) : false;
+
+                return (
+                  <div className="mt-3 grid gap-3">
+                    {video && (
+                      <div>
+                        <VideoPlayer src={video} poster={null} />
+                      </div>
+                    )}
+
+                    {isPdf && asset && (
+                      <div>
+                        <PdfPageViewer src={asset} />
+                      </div>
+                    )}
+
+                    {!isPdf && isImg && asset && (
+                      <div>
                         <Image
-                          src={activeSlide.asset_url}
+                          src={asset}
                           alt="Slide asset"
                           width={1600}
                           height={900}
                           className="rounded-lg ring-1 ring-[var(--color-light)] w-full h-auto object-contain"
                         />
                       </div>
-                    );
-                  }
-                  return (
-                    <div className="mt-3 text-sm">
-                      <a className="underline break-all" href={activeSlide.asset_url} target="_blank" rel="noreferrer">
-                        Open slide asset
-                      </a>
-                    </div>
-                  );
-                }
-                return null;
+                    )}
+
+                    {!isPdf && !isImg && asset && (
+                      <div className="text-sm">
+                        <a className="underline break-all" href={asset} target="_blank" rel="noreferrer">
+                          Open slide asset
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
               })()}
 
               {slideHtml && (
@@ -1117,7 +1137,10 @@ export default function CourseDashboard() {
 
       {/* Sticky Bottom Action Bar (mobile) */}
       {activeSlide && !native && (
-        <div className="sm:hidden fixed inset-x-0 bottom-0 z-40 bg-white/95 backdrop-blur border-t border-[color:var(--color-light)]">
+        <div
+          className="sm:hidden fixed inset-x-0 bottom-0 z-40 bg-white/95 backdrop-blur border-t border-[color:var(--color-light)]"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
           <div className="mx-auto max-w-screen-2xl px-4 py-2 grid grid-cols-3 gap-2">
             <button
               type="button"
