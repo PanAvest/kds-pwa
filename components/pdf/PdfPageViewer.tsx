@@ -47,6 +47,8 @@ export default function PdfPageViewer({ src, className }: Props) {
   const [page, setPage] = useState(1);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [zoom, setZoom] = useState(1);
+  const minZoom = 0.5;
+  const maxZoom = 3;
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -286,8 +288,10 @@ export default function PdfPageViewer({ src, className }: Props) {
       const dist = Math.hypot(dx, dy);
       const start = pinchStartRef.current;
       const ratio = dist / Math.max(1, start.dist);
-      const nextZoom = Math.min(3, Math.max(0.5, start.zoom * ratio));
+      const nextZoom = Math.min(maxZoom, Math.max(minZoom, start.zoom * ratio));
       setZoom(nextZoom);
+      // Reset pinch baseline when clamped to avoid elastic over-zoom
+      pinchStartRef.current = { dist, zoom: nextZoom };
     }
   };
 
@@ -320,7 +324,7 @@ export default function PdfPageViewer({ src, className }: Props) {
 
       <div
         className={`mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${
-          isFullscreen ? "fixed bottom-3 left-0 right-0 z-30 px-4" : ""
+          isFullscreen ? "fixed bottom-12 left-0 right-0 z-30 px-4" : ""
         }`}
         style={isFullscreen ? { pointerEvents: "none" } : undefined}
       >
