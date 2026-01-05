@@ -46,6 +46,7 @@ export default function PdfPageViewer({ src, className }: Props) {
   const fullRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(1);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [zoom, setZoom] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +58,7 @@ export default function PdfPageViewer({ src, className }: Props) {
   const lastSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
   const resizeFrameRef = useRef<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pinchStartRef = useRef<{ dist: number; zoom: number } | null>(null);
 
   const pdfApi = pdfjs as unknown as PdfJsApi;
 
@@ -100,14 +102,14 @@ export default function PdfPageViewer({ src, className }: Props) {
       if (currentRenderId !== renderIdRef.current) return;
 
       const containerWidth = containerRef.current.clientWidth || 1;
+      const viewportBase = pageObj.getViewport({ scale: 1 });
       const containerHeight =
         containerRef.current.clientHeight || (typeof window !== "undefined" ? window.innerHeight * 0.72 : viewportBase.height);
-      const viewportBase = pageObj.getViewport({ scale: 1 });
       const scale = Math.max(
         0.1,
         Math.min(containerWidth / viewportBase.width, containerHeight / viewportBase.height)
       );
-      const viewport = pageObj.getViewport({ scale, rotation });
+      const viewport = pageObj.getViewport({ scale: scale * zoom, rotation });
 
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
@@ -133,7 +135,7 @@ export default function PdfPageViewer({ src, className }: Props) {
       setError((e as Error).message || "Failed to load PDF");
       setLoading(false);
     }
-  }, [ensureDoc, rotation]);
+  }, [ensureDoc, rotation, zoom]);
 
   useEffect(() => {
     renderIdRef.current += 1;
@@ -141,6 +143,7 @@ export default function PdfPageViewer({ src, className }: Props) {
     setLoading(true);
     setError(null);
     setPage(1);
+    setZoom(1);
     void renderPage(1);
     return () => {
       renderIdRef.current += 1;
@@ -155,6 +158,12 @@ export default function PdfPageViewer({ src, className }: Props) {
     renderIdRef.current += 1;
     void renderPage(page);
   }, [rotation, page, renderPage]);
+
+  // Re-render when zoom changes
+  useEffect(() => {
+    renderIdRef.current += 1;
+    void renderPage(page);
+  }, [zoom, page, renderPage]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -199,7 +208,12 @@ export default function PdfPageViewer({ src, className }: Props) {
   useEffect(() => {
     const onChange = () => {
       const node = fullRef.current;
-      setIsFullscreen(!!node && document.fullscreenElement === node);
+      const active = !!node && document.fullscreenElement === node;
+      setIsFullscreen(active);
+      if (!active) {
+        setRotation(0);
+        setZoom(1);
+      }
     };
     document.addEventListener("fullscreenchange", onChange);
     return () => {
@@ -230,13 +244,21 @@ export default function PdfPageViewer({ src, className }: Props) {
 
   const onTouchStart = (e: React.TouchEvent) => {
     e.stopPropagation();
-    if (e.touches.length !== 1) return;
-    const t = e.touches[0];
-    touchStartRef.current = { x: t.clientX, y: t.clientY };
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      touchStartRef.current = { x: t.clientX, y: t.clientY };
+    } else if (e.touches.length === 2 && isFullscreen) {
+      const [t1, t2] = e.touches;
+      const dx = t1.clientX - t2.clientX;
+      const dy = t1.clientY - t2.clientY;
+      const dist = Math.hypot(dx, dy);
+      pinchStartRef.current = { dist, zoom };
+    }
   };
 
   const onTouchEnd = (e: React.TouchEvent) => {
     e.stopPropagation();
+    pinchStartRef.current = null;
     if (!touchStartRef.current) return;
     const start = touchStartRef.current;
     touchStartRef.current = null;
@@ -244,9 +266,29 @@ export default function PdfPageViewer({ src, className }: Props) {
     const t = e.changedTouches[0];
     const dx = t.clientX - start.x;
     const dy = t.clientY - start.y;
+    // Swipe down to exit fullscreen
+    if (isFullscreen && dy > 80 && Math.abs(dx) < 40) {
+      void document.exitFullscreen().catch(() => {});
+      return;
+    }
     if (Math.abs(dx) < 40 || Math.abs(dy) > 30) return;
     if (dx < 0) onNext(e);
     else onPrev(e);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!isFullscreen) return;
+    if (pinchStartRef.current && e.touches.length === 2) {
+      e.preventDefault();
+      const [t1, t2] = e.touches;
+      const dx = t1.clientX - t2.clientX;
+      const dy = t1.clientY - t2.clientY;
+      const dist = Math.hypot(dx, dy);
+      const start = pinchStartRef.current;
+      const ratio = dist / Math.max(1, start.dist);
+      const nextZoom = Math.min(3, Math.max(0.5, start.zoom * ratio));
+      setZoom(nextZoom);
+    }
   };
 
   return (
@@ -260,19 +302,34 @@ export default function PdfPageViewer({ src, className }: Props) {
           e.stopPropagation();
         }
       }}
+      onTouchMove={onTouchMove}
     >
       <div
         ref={containerRef}
-        className="w-full max-w-full overflow-hidden rounded-lg border border-[color:var(--color-light)] bg-white flex items-center justify-center"
-        style={isFullscreen ? { minHeight: "90vh", maxHeight: "100vh" } : { minHeight: "65vh", maxHeight: "85vh" }}
+        className={`w-full max-w-full overflow-auto rounded-lg border border-[color:var(--color-light)] bg-white flex items-center justify-center ${isFullscreen ? "touch-pan-y" : ""}`}
+        style={
+          isFullscreen
+            ? { minHeight: "100vh", maxHeight: "100vh", width: "100vw", margin: "0 auto", touchAction: "none" }
+            : { minHeight: "65vh", maxHeight: "85vh" }
+        }
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
         <canvas ref={canvasRef} className="block" />
       </div>
 
-      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div
+        className={`mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${
+          isFullscreen ? "fixed bottom-3 left-0 right-0 z-30 px-4" : ""
+        }`}
+        style={isFullscreen ? { pointerEvents: "none" } : undefined}
+      >
+        <div
+          className={`flex items-center gap-2 flex-wrap ${
+            isFullscreen ? "mx-auto max-w-screen-sm rounded-xl bg-white/90 px-3 py-2 shadow-lg" : ""
+          }`}
+          style={isFullscreen ? { pointerEvents: "auto" } : undefined}
+        >
           <button
             type="button"
             onClick={onPrev}
@@ -289,29 +346,38 @@ export default function PdfPageViewer({ src, className }: Props) {
           >
             Next page
           </button>
-          <button
-            type="button"
-            onClick={() => setRotation((r) => ((r + 270) % 360) as 0 | 90 | 180 | 270)}
-            className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
-          >
-            Rotate ⟲
-          </button>
-          <button
-            type="button"
-            onClick={() => setRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
-            className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
-          >
-            Rotate ⟳
-          </button>
-          <button
-            type="button"
-            onClick={() => setRotation(0)}
-            className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
-          >
-            Reset
-          </button>
+          {isFullscreen && (
+            <>
+              <button
+                type="button"
+                onClick={() => setRotation((r) => ((r + 270) % 360) as 0 | 90 | 180 | 270)}
+                className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
+              >
+                Rotate ⟲
+              </button>
+              <button
+                type="button"
+                onClick={() => setRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
+                className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
+              >
+                Rotate ⟳
+              </button>
+              <button
+                type="button"
+                onClick={() => setRotation(0)}
+                className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
+              >
+                Reset
+              </button>
+            </>
+          )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-[color:var(--color-text-muted)]">
+        <div
+          className={`flex items-center gap-3 text-xs text-[color:var(--color-text-muted)] ${
+            isFullscreen ? "mx-auto max-w-screen-sm rounded-xl bg-white/90 px-3 py-2 shadow-lg" : ""
+          }`}
+          style={isFullscreen ? { pointerEvents: "auto" } : undefined}
+        >
           <span>{loading ? "Loading…" : error ? "Error" : `Page ${page} of ${totalPages || "?"}`}</span>
           <button
             type="button"
