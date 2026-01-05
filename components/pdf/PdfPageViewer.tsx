@@ -54,7 +54,7 @@ export default function PdfPageViewer({ src, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<{ cancel?: () => void } | null>(null);
   const renderIdRef = useRef(0);
-  const lastWidthRef = useRef<number>(0);
+  const lastSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
   const resizeFrameRef = useRef<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -100,8 +100,13 @@ export default function PdfPageViewer({ src, className }: Props) {
       if (currentRenderId !== renderIdRef.current) return;
 
       const containerWidth = containerRef.current.clientWidth || 1;
+      const containerHeight =
+        containerRef.current.clientHeight || (typeof window !== "undefined" ? window.innerHeight * 0.72 : viewportBase.height);
       const viewportBase = pageObj.getViewport({ scale: 1 });
-      const scale = Math.max(0.1, containerWidth / viewportBase.width);
+      const scale = Math.max(
+        0.1,
+        Math.min(containerWidth / viewportBase.width, containerHeight / viewportBase.height)
+      );
       const viewport = pageObj.getViewport({ scale, rotation });
 
       const canvas = canvasRef.current;
@@ -112,6 +117,8 @@ export default function PdfPageViewer({ src, className }: Props) {
       canvas.height = Math.floor(viewport.height * dpr);
       canvas.style.width = `${viewport.width}px`;
       canvas.style.height = `${viewport.height}px`;
+      canvas.style.maxWidth = "100%";
+      canvas.style.maxHeight = "100%";
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       if (renderTaskRef.current?.cancel) renderTaskRef.current.cancel();
@@ -152,13 +159,14 @@ export default function PdfPageViewer({ src, className }: Props) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    lastWidthRef.current = el.clientWidth;
+    lastSizeRef.current = { w: el.clientWidth, h: el.clientHeight };
 
     const onResize = () => {
       if (!containerRef.current) return;
       const w = containerRef.current.clientWidth;
-      if (Math.abs(w - lastWidthRef.current) < 2) return;
-      lastWidthRef.current = w;
+      const h = containerRef.current.clientHeight;
+      if (Math.abs(w - lastSizeRef.current.w) < 2 && Math.abs(h - lastSizeRef.current.h) < 2) return;
+      lastSizeRef.current = { w, h };
       if (resizeFrameRef.current) cancelAnimationFrame(resizeFrameRef.current);
       resizeFrameRef.current = requestAnimationFrame(() => {
         resizeFrameRef.current = null;
@@ -255,13 +263,12 @@ export default function PdfPageViewer({ src, className }: Props) {
     >
       <div
         ref={containerRef}
-        className="w-full max-w-full overflow-hidden rounded-lg border border-[color:var(--color-light)] bg-white"
+        className="w-full max-w-full overflow-hidden rounded-lg border border-[color:var(--color-light)] bg-white flex items-center justify-center"
+        style={isFullscreen ? { minHeight: "90vh", maxHeight: "100vh" } : { minHeight: "65vh", maxHeight: "85vh" }}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        <div className="w-full flex justify-center bg-white">
-          <canvas ref={canvasRef} className="block" />
-        </div>
+        <canvas ref={canvasRef} className="block" />
       </div>
 
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
