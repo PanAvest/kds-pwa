@@ -3,6 +3,19 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as pdfjs from "pdfjs-dist";
 
+// pdfjs uses Promise.withResolvers in newer builds; polyfill for runtimes that lack it.
+if (typeof Promise !== "undefined" && !(Promise as unknown as { withResolvers?: unknown }).withResolvers) {
+  (Promise as unknown as { withResolvers?: <T>() => { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: unknown) => void } }).withResolvers = function withResolvers<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
+
 type PdfDocument = {
   numPages: number;
   getPage: (pageNumber: number) => Promise<PdfPage>;
@@ -30,10 +43,12 @@ const workerSet = { done: false };
 const docCache = new Map<string, Promise<PdfDocument>>();
 
 export default function PdfPageViewer({ src, className }: Props) {
+  const fullRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<{ cancel?: () => void } | null>(null);
@@ -148,6 +163,31 @@ export default function PdfPageViewer({ src, className }: Props) {
     };
   }, [page, renderPage]);
 
+  const toggleFullscreen = async () => {
+    const node = fullRef.current;
+    if (!node) return;
+    try {
+      if (!document.fullscreenElement) {
+        await node.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    const onChange = () => {
+      const node = fullRef.current;
+      setIsFullscreen(!!node && document.fullscreenElement === node);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+    };
+  }, []);
+
   const canGoPrev = page > 1;
   const canGoNext = totalPages > 0 && page < totalPages;
 
@@ -192,6 +232,7 @@ export default function PdfPageViewer({ src, className }: Props) {
 
   return (
     <div
+      ref={fullRef}
       className={["w-full max-w-full", className ?? ""].join(" ").trim()}
       onClick={(e) => { e.stopPropagation(); }}
       onKeyDown={(e) => {
@@ -229,8 +270,16 @@ export default function PdfPageViewer({ src, className }: Props) {
             Next page
           </button>
         </div>
-        <div className="text-xs text-[color:var(--color-text-muted)]">
-          {loading ? "Loading…" : error ? "Error" : `Page ${page} of ${totalPages || "?"}`}
+        <div className="flex items-center gap-3 text-xs text-[color:var(--color-text-muted)]">
+          <span>{loading ? "Loading…" : error ? "Error" : `Page ${page} of ${totalPages || "?"}`}</span>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="rounded-lg border px-3 py-1 text-[11px] sm:text-xs active:scale-[0.98]"
+            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          >
+            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          </button>
         </div>
       </div>
 
