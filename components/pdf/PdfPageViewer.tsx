@@ -45,6 +45,7 @@ const docCache = new Map<string, Promise<PdfDocument>>();
 export default function PdfPageViewer({ src, className }: Props) {
   const fullRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(1);
+  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,15 +102,17 @@ export default function PdfPageViewer({ src, className }: Props) {
       const containerWidth = containerRef.current.clientWidth || 1;
       const viewportBase = pageObj.getViewport({ scale: 1 });
       const scale = Math.max(0.1, containerWidth / viewportBase.width);
-      const viewport = pageObj.getViewport({ scale });
+      const viewport = pageObj.getViewport({ scale, rotation });
 
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas unavailable");
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      canvas.style.width = "100%";
-      canvas.style.height = "auto";
+      const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2.5) : 1;
+      canvas.width = Math.floor(viewport.width * dpr);
+      canvas.height = Math.floor(viewport.height * dpr);
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       if (renderTaskRef.current?.cancel) renderTaskRef.current.cancel();
       const task = pageObj.render({ canvasContext: ctx, viewport });
@@ -123,7 +126,7 @@ export default function PdfPageViewer({ src, className }: Props) {
       setError((e as Error).message || "Failed to load PDF");
       setLoading(false);
     }
-  }, [ensureDoc]);
+  }, [ensureDoc, rotation]);
 
   useEffect(() => {
     renderIdRef.current += 1;
@@ -136,7 +139,15 @@ export default function PdfPageViewer({ src, className }: Props) {
       renderIdRef.current += 1;
       if (renderTaskRef.current?.cancel) renderTaskRef.current.cancel();
     };
-  }, [src, renderPage]);
+    // We intentionally only depend on src so rotation changes don't reset progress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src]);
+
+  // Re-render current page when rotation changes without resetting progress
+  useEffect(() => {
+    renderIdRef.current += 1;
+    void renderPage(page);
+  }, [rotation, page, renderPage]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -248,11 +259,13 @@ export default function PdfPageViewer({ src, className }: Props) {
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        <canvas ref={canvasRef} className="block w-full h-auto" />
+        <div className="w-full flex justify-center bg-white">
+          <canvas ref={canvasRef} className="block" />
+        </div>
       </div>
 
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={onPrev}
@@ -268,6 +281,27 @@ export default function PdfPageViewer({ src, className }: Props) {
             className={`min-w-[44px] px-3 py-2 rounded-lg border text-sm ${canGoNext ? "active:scale-[0.98]" : "opacity-50 cursor-not-allowed"}`}
           >
             Next page
+          </button>
+          <button
+            type="button"
+            onClick={() => setRotation((r) => ((r + 270) % 360) as 0 | 90 | 180 | 270)}
+            className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
+          >
+            Rotate ⟲
+          </button>
+          <button
+            type="button"
+            onClick={() => setRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
+            className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
+          >
+            Rotate ⟳
+          </button>
+          <button
+            type="button"
+            onClick={() => setRotation(0)}
+            className="min-w-[44px] px-3 py-2 rounded-lg border text-sm active:scale-[0.98]"
+          >
+            Reset
           </button>
         </div>
         <div className="flex items-center gap-3 text-xs text-[color:var(--color-text-muted)]">
