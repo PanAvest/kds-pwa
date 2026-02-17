@@ -2,9 +2,28 @@ import { NextResponse } from "next/server";
 
 export const runtime = "edge";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+};
+
+function injectBaseTag(html: string, baseHref: string): string {
+  if (/<base\s/i.test(html)) return html;
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head([^>]*)>/i, `<head$1><base href="${baseHref}">`);
+  }
+  return `<base href="${baseHref}">${html}`;
+}
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
+    const requestUrl = new URL(req.url);
+    const { searchParams } = requestUrl;
     let path = searchParams.get("path") || "";
 
     if (!path) {
@@ -37,16 +56,37 @@ export async function GET(req: Request) {
 
     const contentType =
       upstream.headers.get("content-type") || "application/octet-stream";
-    const body = upstream.body;
+    const isHtml = contentType.toLowerCase().includes("text/html");
+    const upstreamBasePath = new URL(upstream.url).pathname.replace(
+      /\/[^/]*$/,
+      "/"
+    );
+    const localAssetBaseHref = `${requestUrl.origin}/api/interactive/`;
 
-    return new Response(body, {
+    if (isHtml) {
+      const html = await upstream.text();
+      const patched = injectBaseTag(html, localAssetBaseHref);
+
+      return new Response(patched, {
+        status: upstream.status,
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "no-store",
+          ...CORS_HEADERS,
+          "X-PWA-Proxy": "1",
+          "X-PWA-Proxy-Upstream": targetUrl,
+          "X-PWA-Proxy-Base": localAssetBaseHref,
+          "X-PWA-Proxy-Upstream-BasePath": upstreamBasePath,
+        },
+      });
+    }
+
+    return new Response(upstream.body, {
       status: upstream.status,
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "no-store",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        ...CORS_HEADERS,
         "X-PWA-Proxy": "1",
         "X-PWA-Proxy-Upstream": targetUrl,
       },

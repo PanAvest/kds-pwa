@@ -4,7 +4,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams, useParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import * as pdfjs from "pdfjs-dist";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { isNativeApp } from "@/lib/nativePlatform";
@@ -53,7 +53,6 @@ type FitMode = "fit-width" | "fixed";
 
 export default function EbookDetailPage() {
   const router = useRouter();
-  const search = useSearchParams();
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
   const [isNative, setIsNative] = useState(false);
@@ -63,10 +62,6 @@ export default function EbookDetailPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const [own, setOwn] = useState<OwnershipState>({ kind: "loading" });
-  const [userId, setUserId] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [buying, setBuying] = useState(false);
-  const [verifying, setVerifying] = useState<string | null>(null);
 
   // Reader state
   const [pdfReady, setPdfReady] = useState(false);
@@ -140,16 +135,14 @@ export default function EbookDetailPage() {
     }
   }, []);
 
-  /** Auth (view page ok; login required to buy/read) */
+  /** Auth (view page ok; login required to read linked items) */
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setUserId(""); setEmail(""); setOwn({ kind: "signed_out" });
+        setOwn({ kind: "signed_out" });
         return;
       }
-      setUserId(user.id);
-      setEmail(user.email ?? "");
     })();
   }, []);
 
@@ -158,7 +151,16 @@ export default function EbookDetailPage() {
     if (!slug) return;
     (async () => {
       try {
-        const r = await fetch(`/api/ebooks/${encodeURIComponent(slug)}`, { cache: "no-store" });
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        const r = await fetch(`/api/ebooks/${encodeURIComponent(slug)}`, {
+          cache: "no-store",
+          headers: accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : undefined,
+        });
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error || r.statusText);
         const raw = (j && typeof j === "object" && "ebook" in j) ? (j as any).ebook : j;
@@ -183,58 +185,16 @@ export default function EbookDetailPage() {
           .select("status")
           .eq("user_id", user.id)
           .eq("ebook_id", ebook.id)
+          .in("status", ["paid", "free"])
           .maybeSingle();
         if (error) { setOwn({ kind: "not_owner" }); flagOfflineFromError(error); return; }
-        setOwn(data?.status === "paid" ? { kind: "owner" } : { kind: "not_owner" });
+        setOwn(data ? { kind: "owner" } : { kind: "not_owner" });
       } catch (e) {
         setOwn({ kind: "not_owner" });
         flagOfflineFromError(e);
       }
     })();
   }, [ebook?.id, flagOfflineFromError]);
-
-  /** Handle Paystack return (?reference=...) + polling */
-  useEffect(() => {
-    const ref = search.get("reference") || search.get("trxref") || search.get("ref") || null;
-    if (!ref || !ebook?.id || !userId) return;
-
-    let stopped = false;
-    let tries = 0;
-    setVerifying(ref);
-
-    (async () => {
-      try {
-        await fetch(`/api/payments/paystack/verify?reference=${encodeURIComponent(ref)}`, { method: "GET" })
-          .then((r) => r.json())
-          .catch((err) => { flagOfflineFromError(err); return null; });
-      } catch (err) { flagOfflineFromError(err); }
-
-      while (!stopped && tries < 15) {
-        tries += 1;
-        try {
-          const { data, error } = await supabase
-            .from("ebook_purchases")
-            .select("status")
-            .eq("user_id", userId)
-            .eq("ebook_id", ebook.id)
-            .maybeSingle();
-          const paid = !error && data?.status === "paid";
-          if (paid) {
-            setOwn({ kind: "owner" });
-            setVerifying(null);
-            router.replace(`/ebooks/${encodeURIComponent(slug)}`);
-            return;
-          }
-          if (error) flagOfflineFromError(error);
-        } catch (err) { flagOfflineFromError(err); }
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-      setVerifying(null);
-    })();
-
-    return () => { stopped = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, ebook?.id, userId, slug]);
 
   /** Price label (safe number parsing) */
   const price = useMemo(() => {
@@ -256,39 +216,6 @@ export default function EbookDetailPage() {
       </p>
     </div>
   );
-
-  /** Start Paystack */
-  async function handleBuy() {
-    if (isNative) {
-      setErr("Purchases are managed on the KDS web portal.");
-      return;
-    }
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push(`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`); return; }
-    if (!ebook || !email) return;
-
-    setBuying(true);
-    try {
-      const numeric = typeof ebook.price_cents === "number" ? ebook.price_cents : Number(ebook.price_cents ?? 0);
-      const amountMinor = Math.round(Number.isFinite(numeric) ? numeric : 0);
-      const res = await fetch("/api/payments/paystack/init", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email, amountMinor,
-          meta: { kind: "ebook", user_id: user.id, ebook_id: ebook.id, slug: ebook.slug },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.authorization_url) throw new Error(data?.error || "Failed to initialize payment.");
-      // Use replace to avoid opening a new tab and return back into the app domain
-      window.location.replace(data.authorization_url as string);
-    } catch (e) {
-      setErr((e as Error).message || "Payment init failed");
-      flagOfflineFromError(e);
-    } finally {
-      setBuying(false);
-    }
-  }
 
   /** Load PDF bytes via secure route with bearer token, mirroring main app */
   const ensurePdfDoc = useCallback(async (): Promise<PdfDoc | null> => {
@@ -315,7 +242,10 @@ export default function EbookDetailPage() {
       router.push(`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`);
       return null;
     }
-    if (res.status === 403) { setRenderError("You haven’t purchased this e-book for this account."); return null; }
+    if (res.status === 403) {
+      setRenderError("This e-book is not linked to your account.");
+      return null;
+    }
     if (res.status === 404) { setRenderError("File not available for this e-book."); return null; }
     if (!res.ok) { setRenderError(`Secure PDF request failed: ${res.status}`); return null; }
 
@@ -499,12 +429,8 @@ export default function EbookDetailPage() {
               )}
 
               <div className="mt-4 grid gap-3">
-                {own.kind === "loading" && (<div className="text-sm text-muted">Checking access…</div>)}
-
-                {verifying && (
-                  <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
-                    Verifying payment (ref: {verifying})… You’ll be unlocked automatically once confirmed.
-                  </div>
+                {own.kind === "loading" && (
+                  <div className="text-sm text-muted">Checking access…</div>
                 )}
 
                 {own.kind === "signed_out" && (
@@ -524,7 +450,7 @@ export default function EbookDetailPage() {
                         href={`/auth/sign-in?redirect=${encodeURIComponent(`/ebooks/${slug}`)}`}
                         className="inline-flex items-center justify-center rounded-lg bg-brand text-white px-5 py-3 font-semibold hover:opacity-90 w-full sm:w-auto"
                       >
-                        Sign in to buy
+                        Sign in
                       </Link>
                       <Link
                         href={dashboardHref}
@@ -549,14 +475,14 @@ export default function EbookDetailPage() {
                     </div>
                   ) : (
                     <>
-                      <button
-                        onClick={handleBuy}
-                        disabled={buying}
-                        className="rounded-lg text-white px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-60 w-full sm:w-auto"
-                        style={{ backgroundColor: "var(--color-accent-red)" }}
+                      <a
+                        href="https://www.panavestkds.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center rounded-lg px-5 py-3 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50 w-full sm:w-auto"
                       >
-                        {buying ? "Redirecting…" : `Buy • ${price}`}
-                      </button>
+                        Manage on Website
+                      </a>
                       <Link
                         href={dashboardHref}
                         className="inline-flex items-center justify-center rounded-lg px-5 py-3 ring-1 ring-[var(--color-light)] hover:bg-[color:var(--color-light)]/50 w-full sm:w-auto"
@@ -590,8 +516,8 @@ export default function EbookDetailPage() {
               {own.kind !== "owner" && (
                 <p className="mt-3 text-xs text-muted">
                   {isNative
-                    ? "This mobile app is for existing PanAvest KDS accounts. Sign in to view items already on your account."
-                    : "Sign in and purchase to unlock reading."}
+                    ? "This mobile app is for existing PanAvest KDS accounts. Sign in to view e-books already linked to your account."
+                    : "This companion app only opens e-books linked to your account."}
                 </p>
               )}
             </div>
@@ -609,8 +535,8 @@ export default function EbookDetailPage() {
                     {isNative
                     ? "This e-book is not available in the PanAvest KDS mobile app for this account. Please use www.panavestkds.com to manage access."
                       : own.kind === "signed_out"
-                        ? "Sign in and purchase to read the full e-book."
-                        : "Purchase to read the full e-book."}
+                        ? "Sign in to read e-books linked to your account."
+                        : "This e-book is not linked to your account."}
                   </p>
                 </div>
               </div>

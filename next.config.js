@@ -10,6 +10,9 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
   images: {
+    // External Supabase image URLs are already optimized enough for this app.
+    // Disabling Next's optimizer avoids intermittent /_next/image 500s in PWA/mobile contexts.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",

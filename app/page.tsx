@@ -17,6 +17,7 @@ type Course = {
   cpd_points: number | null
   published: boolean | null
   coming_soon?: boolean | null
+  free_for_logged_in?: boolean | null
 }
 
 type Ebook = {
@@ -27,6 +28,7 @@ type Ebook = {
   cover_url: string | null
   price_cents: number | null
   published: boolean | null
+  linked_status?: "paid" | "free"
 }
 
 const BRAND = {
@@ -37,7 +39,13 @@ const safeSrc = (src?: string | null) => (src && src.trim() ? src : "/icon-512.p
 const normalizeCourse = (c: any): Course => ({
   ...c,
   coming_soon: c?.coming_soon ?? false,
+  free_for_logged_in: c?.free_for_logged_in === true,
 })
+const isMissingColumn = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  (error as { code?: string }).code === "42703"
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([])
@@ -69,33 +77,85 @@ export default function HomePage() {
 
     ;(async () => {
       try {
-        // Fetch in parallel so home loads faster
-        const [coursesRes, ebooksRes] = await Promise.allSettled([
+        const { data: authData } = await supabase.auth.getUser()
+        const authUser = authData.user
+        if (!alive) return
+        if (!authUser) {
+          setCourses([])
+          setEbooks([])
+          return
+        }
+
+        // Companion mode: show account-linked items only
+        const [coursesRes, ebooksRes, freeCoursesRes] = await Promise.allSettled([
           supabase
-            .from("courses")
-            .select("id, slug, title, description, img, cpd_points, published, created_at, coming_soon")
-            .eq("published", true)
-            .order("created_at", { ascending: false })
+            .from("enrollments")
+            .select(
+              "course:course_id(id, slug, title, description, img, cpd_points, published, created_at, coming_soon)"
+            )
+            .eq("user_id", authUser.id)
+            .order("updated_at", { ascending: false })
             .limit(6),
           supabase
-            .from("ebooks")
-            .select("id, slug, title, description, cover_url, price_cents, published, created_at")
-            .eq("published", true)
-            .order("created_at", { ascending: false })
+            .from("ebook_purchases")
+            .select(
+              "status,ebook:ebook_id(id, slug, title, description, cover_url, price_cents, published)"
+            )
+            .eq("user_id", authUser.id)
+            .in("status", ["paid", "free"])
+            .order("updated_at", { ascending: false })
             .limit(8),
+          supabase
+            .from("courses")
+            .select(
+              "id, slug, title, description, img, cpd_points, published, created_at, coming_soon, free_for_logged_in"
+            )
+            .eq("published", true)
+            .eq("free_for_logged_in", true)
+            .order("created_at", { ascending: false })
+            .limit(6),
         ])
 
         if (!alive) return
 
         if (coursesRes.status === "fulfilled") {
-          setCourses(((coursesRes.value.data ?? []) as any[]).map(normalizeCourse))
+          const mapped = ((coursesRes.value.data ?? []) as any[])
+            .map((row) => (row?.course ? normalizeCourse(row.course) : null))
+            .filter(Boolean) as Course[]
+          const dedup = new Map<string, Course>()
+          mapped.forEach((c) => dedup.set(c.id, c))
+          if (freeCoursesRes.status === "fulfilled") {
+            if (freeCoursesRes.value.error && !isMissingColumn(freeCoursesRes.value.error)) {
+              console.error("Failed to load free courses", freeCoursesRes.value.error)
+            } else {
+              ;((freeCoursesRes.value.data ?? []) as any[]).forEach((row) => {
+                if (!row?.id || dedup.has(row.id)) return
+                dedup.set(row.id, normalizeCourse(row))
+              })
+            }
+          } else {
+            console.error("Failed to load free courses", freeCoursesRes.reason)
+          }
+          setCourses(Array.from(dedup.values()))
         } else {
           console.error("Failed to load courses", coursesRes.status === "rejected" ? coursesRes.reason : "unknown")
           setCourses([])
         }
 
         if (ebooksRes.status === "fulfilled") {
-          setEbooks((ebooksRes.value.data ?? []) as Ebook[])
+          const mapped = ((ebooksRes.value.data ?? []) as any[])
+            .map((row) => {
+              const raw = Array.isArray(row?.ebook) ? row.ebook[0] : row?.ebook
+              if (!raw || raw.published !== true) return null
+              return {
+                ...raw,
+                linked_status: row?.status === "free" ? "free" : "paid",
+              } as Ebook
+            })
+            .filter(Boolean) as Ebook[]
+          const dedup = new Map<string, Ebook>()
+          mapped.forEach((b) => dedup.set(b.id, b))
+          setEbooks(Array.from(dedup.values()))
         } else {
           console.error("Failed to load ebooks", ebooksRes.status === "rejected" ? ebooksRes.reason : "unknown")
           setEbooks([])
@@ -494,7 +554,9 @@ export default function HomePage() {
                       {typeof b?.price_cents === "number" && (
                         <div className="mt-3">
                           <code className="rounded-md bg-[color:var(--color-light)]/40 px-2 py-1 text-[12px]">
-                            GH₵ {(b.price_cents / 100).toFixed(2)}
+                            {b.linked_status === "free"
+                              ? "Free"
+                              : `GH₵ ${(b.price_cents / 100).toFixed(2)}`}
                           </code>
                         </div>
                       )}

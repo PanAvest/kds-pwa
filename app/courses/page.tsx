@@ -6,7 +6,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { isNativeApp } from "@/lib/nativePlatform";
 
 type Course = {
   id: string;
@@ -18,64 +17,99 @@ type Course = {
   published: boolean | null;
   created_at?: string | null;
   coming_soon?: boolean | null;
+  enrollment_paid?: boolean | null;
+  free_for_logged_in?: boolean | null;
 };
 
 const safeSrc = (src?: string | null) => (src && src.trim() ? src : "/icon-512.png");
+const COURSE_COLUMNS =
+  "id,slug,title,description,img,cpd_points,published,created_at,coming_soon";
 const normalizeCourse = (c: any): Course => ({
   ...c,
   coming_soon: c?.coming_soon ?? false,
+  enrollment_paid:
+    typeof c?.enrollment_paid === "boolean" ? c.enrollment_paid : null,
+  free_for_logged_in: c?.free_for_logged_in === true,
 });
+const isMissingColumn = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  (error as { code?: string }).code === "42703";
 
 export default function KnowledgePage() {
   const [all, setAll] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [native, setNative] = useState(false);
-
-  useEffect(() => {
-    try {
-      setNative(isNativeApp());
-    } catch {
-      setNative(false);
-    }
-  }, []);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        if (native) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!alive) return;
-          if (!user) {
-            setAll([]);
-            return;
-          }
-          const { data, error } = await supabase
-            .from("enrollments")
-            .select("course:course_id(id,slug,title,description,img,cpd_points,published,created_at,coming_soon)")
-            .eq("user_id", user.id);
-          if (!alive) return;
-          if (error || !data) { setAll([]); return; }
-          const mapped = (data ?? [])
-            .map((row: any) => (row?.course ? normalizeCourse(row.course) : null))
-            .filter(Boolean) as Course[];
-          setAll(mapped);
-        } else {
-          const { data } = await supabase
-            .from("courses")
-            .select("id,slug,title,description,img,cpd_points,published,created_at,coming_soon")
-            .eq("published", true)
-            .order("created_at", { ascending: false });
-          if (!alive) return;
-          setAll(((data ?? []) as any[]).map(normalizeCourse));
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!alive) return;
+        if (!user) {
+          setAll([]);
+          return;
         }
+
+        const { data: enrollmentRows, error: enrollmentErr } = await supabase
+          .from("enrollments")
+          .select(`paid,course:course_id(${COURSE_COLUMNS})`)
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false });
+
+        if (!alive) return;
+        if (enrollmentErr) {
+          setAll([]);
+          return;
+        }
+
+        const mapped = (enrollmentRows ?? [])
+          .map((row: any) =>
+            row?.course
+              ? normalizeCourse({
+                  ...row.course,
+                  enrollment_paid:
+                    typeof row?.paid === "boolean" ? row.paid : null,
+                })
+              : null
+          )
+          .filter(Boolean) as Course[];
+
+        const dedup = new Map<string, Course>();
+        for (const c of mapped) dedup.set(c.id, c);
+
+        const freeAttempt = await supabase
+          .from("courses")
+          .select(`${COURSE_COLUMNS},free_for_logged_in`)
+          .eq("published", true)
+          .eq("free_for_logged_in", true)
+          .order("created_at", { ascending: false });
+        if (freeAttempt.error && !isMissingColumn(freeAttempt.error)) {
+          console.error("free courses fetch failed", freeAttempt.error);
+        } else if (freeAttempt.data) {
+          for (const row of freeAttempt.data as any[]) {
+            if (!row?.id || dedup.has(row.id)) continue;
+            dedup.set(
+              row.id,
+              normalizeCourse({
+                ...row,
+                enrollment_paid: false,
+                free_for_logged_in: true,
+              })
+            );
+          }
+        }
+        setAll(Array.from(dedup.values()));
       } finally {
         if (alive) setLoading(false);
       }
     })();
     return () => { alive = false; };
-  }, [native]);
+  }, []);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -111,11 +145,11 @@ export default function KnowledgePage() {
         </div>
       </header>
 
-      {native && !loading && filtered.length === 0 && (
+      {!loading && filtered.length === 0 && (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-5 text-amber-900">
-          <div className="font-semibold">No programs are available in this mobile app yet.</div>
+          <div className="font-semibold">No linked programs found for this account.</div>
           <p className="mt-1 text-sm">
-            Enroll in PanAvest KDS programs on www.panavestkds.com, then sign in here to continue learning.
+            This companion app only shows programs already linked to your account on www.panavestkds.com.
           </p>
         </div>
       )}
@@ -154,6 +188,11 @@ export default function KnowledgePage() {
                   <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                     CPPD Score: <b>{c.cpd_points ?? 0}</b>
                   </div>
+                  {c.enrollment_paid === false && (
+                    <div className="mt-2 inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                      Linked free access
+                    </div>
+                  )}
                   {c.description && (
                     <p className="mt-2 text-sm text-[color:var(--color-text-muted)] line-clamp-2">
                       {c.description}

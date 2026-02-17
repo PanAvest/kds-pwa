@@ -46,35 +46,43 @@ export async function GET(req: NextRequest) {
     }
     const userId = userInfo.user.id;
 
-    // 3) Load ebook. Keep selection minimal to avoid column errors.
+    // 3) Load ebook
     const { data: ebook, error: ebookErr } = await sb
       .from("ebooks")
       .select("id, published, sample_url")
       .eq("id", ebookId)
       .maybeSingle();
-
     if (ebookErr) {
-      return NextResponse.json({ error: `DB error: ${ebookErr.message}` }, { status: 500 });
+      const msg =
+        typeof ebookErr === "object" &&
+        ebookErr !== null &&
+        "message" in ebookErr
+          ? String((ebookErr as { message?: unknown }).message ?? "DB error")
+          : "DB error";
+      return NextResponse.json({ error: `DB error: ${msg}` }, { status: 500 });
     }
     if (!ebook || ebook.published !== true) {
       return NextResponse.json({ error: "Ebook not found or not published" }, { status: 404 });
     }
 
-    // 4) Verify ownership in ebook_purchases (status must be 'paid')
+    // 4) Verify account-linked access (paid/free linked rows only)
     const { data: purchase, error: purchaseErr } = await sb
       .from("ebook_purchases")
       .select("status")
       .eq("user_id", userId)
       .eq("ebook_id", ebookId)
+      .in("status", ["paid", "free"])
       .maybeSingle();
 
     if (purchaseErr) {
-      return NextResponse.json({ error: `Purchase check failed: ${purchaseErr.message}` }, { status: 500 });
+      return NextResponse.json(
+        { error: `Purchase check failed: ${purchaseErr.message}` },
+        { status: 500 }
+      );
     }
-
-    const isOwner = purchase?.status === "paid";
+    const isOwner = !!purchase;
     if (!isOwner) {
-      return NextResponse.json({ error: "Not purchased" }, { status: 403 });
+      return NextResponse.json({ error: "Not linked" }, { status: 403 });
     }
 
     // 5) Stream the PDF from sample_url (treat as paid URL for now)

@@ -27,6 +27,7 @@ type CourseRow = {
   title: string;
   img: string | null;
   cpd_points: number | null;
+  free_for_logged_in?: boolean | null;
 };
 type EnrollmentRow = {
   course_id: string;
@@ -147,7 +148,11 @@ function pickEbook(
   if (!e) return null;
   return Array.isArray(e) ? e[0] ?? null : e;
 }
-
+const isMissingColumn = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  (error as { code?: string }).code === "42703";
 const makeKdsCertId = (u: string, courseId?: string) =>
   `KDS-${u.slice(0, 8).toUpperCase()}${
     courseId ? `-${courseId.slice(0, 6).toUpperCase()}` : ""
@@ -524,6 +529,39 @@ export default function DashboardPage() {
           }
         }
 
+        // Free courses for logged-in users
+        const freeCoursesAttempt = await supabase
+          .from("courses")
+          .select("id,title,slug,img,cpd_points,free_for_logged_in")
+          .eq("published", true)
+          .eq("free_for_logged_in", true)
+          .order("created_at", { ascending: false });
+
+        if (freeCoursesAttempt.error && !isMissingColumn(freeCoursesAttempt.error)) {
+          console.error("free courses fetch failed", freeCoursesAttempt.error);
+        } else if (freeCoursesAttempt.data) {
+          const existing = new Set(enrolledTmp.map((e) => e.course_id));
+          for (const c of freeCoursesAttempt.data as CourseRow[]) {
+            if (!c?.id || existing.has(c.id)) continue;
+            enrolledTmp.push({
+              course_id: c.id,
+              progress_pct: 0,
+              title: c.title,
+              slug: c.slug,
+              img: c.img ?? null,
+              cpd_points: c.cpd_points ?? null,
+            });
+            metaTmp[c.id] = {
+              title: c.title,
+              slug: c.slug,
+              cpd_points: c.cpd_points ?? null,
+              img: c.img ?? null,
+            };
+            allCourseIds.push(c.id);
+            existing.add(c.id);
+          }
+        }
+
         // Compute progress from slides for all enrolled courses (ignore legacy enrollments.progress_pct)
         if (allCourseIds.length > 0) {
           const uniqueCourseIds = Array.from(new Set(allCourseIds));
@@ -577,33 +615,34 @@ export default function DashboardPage() {
         setEnrolled(enrolledTmp);
         setCourseMetaMap((prev) => ({ ...metaTmp, ...prev }));
 
-        // Purchased E-Books (paid only)
+        // Linked E-Books (paid or free) for this account
         const { data: purRows } = await supabase
           .from("ebook_purchases")
           .select(
             "ebook_id,status,ebooks!inner(id,slug,title,cover_url,price_cents)"
           )
           .eq("user_id", userId)
-          .eq("status", "paid")
+          .in("status", ["paid", "free"])
           .order("created_at", { ascending: false });
 
         if (!alive) return;
-        if (purRows) {
-          const items = (purRows as unknown as PurchaseRow[])
-            .map((p) => {
-              const e = pickEbook(p.ebooks);
-              if (!e) return null;
-              return {
-                ebook_id: p.ebook_id,
-                slug: e.slug,
-                title: e.title,
-                cover_url: e.cover_url ?? null,
-                price_cedis: `GH₵ ${((e.price_cents ?? 0) / 100).toFixed(2)}`,
-              } as PurchasedEbook;
-            })
-            .filter(Boolean) as PurchasedEbook[];
-          setEbooks(items);
-        }
+        const linkedItems = (purRows as unknown as PurchaseRow[] | null | undefined)
+          ?.map((p) => {
+            const e = pickEbook(p.ebooks);
+            if (!e) return null;
+            const isPaid = p.status === "paid";
+            return {
+              ebook_id: p.ebook_id,
+              slug: e.slug,
+              title: e.title,
+              cover_url: e.cover_url ?? null,
+              price_cedis: isPaid
+                ? `GH₵ ${((e.price_cents ?? 0) / 100).toFixed(2)}`
+                : "Free",
+            } as PurchasedEbook;
+          })
+          .filter(Boolean) as PurchasedEbook[] | undefined;
+        setEbooks(linkedItems ?? []);
 
         // Quiz attempts
         const { data: quizRows } = await supabase
@@ -931,7 +970,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 1) E-Books carousel */}
-        <Section title="Purchased E-Books">
+        <Section title="Linked E-Books">
           {loading ? (
             <div className="px-4">
               <div className="h-36 rounded-xl bg-white border border-light animate-pulse" />
@@ -939,7 +978,7 @@ export default function DashboardPage() {
           ) : ebooks.length === 0 ? (
             <div className="px-4">
               <div className="rounded-xl border border-light bg-white p-4">
-                <p className="text-sm text-muted">No purchased e-books yet.</p>
+                <p className="text-sm text-muted">No linked e-books yet.</p>
                 <Link
                   href="/ebooks"
                   className="mt-2 inline-block rounded-lg px-4 py-2 text-white"

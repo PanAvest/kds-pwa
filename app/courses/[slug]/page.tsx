@@ -7,9 +7,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import NoInternet from "@/components/NoInternet";
-import EnrollCTA from "@/components/EnrollCTA";
 import { supabase } from "@/lib/supabaseClient";
 import { isNativeApp } from "@/lib/nativePlatform";
 
@@ -23,21 +22,28 @@ type Course = {
   cpd_points: number | null;
   published: boolean | null;
   coming_soon?: boolean | null;
+  free_for_logged_in?: boolean | null;
 };
 const normalizeCourse = (c: any): Course => ({
   ...c,
   coming_soon: c?.coming_soon ?? false,
+  free_for_logged_in: c?.free_for_logged_in === true,
 });
+const isMissingColumn = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  (error as { code?: string }).code === "42703";
 
 export default function CoursePreviewPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
-  const router = useRouter();
   const [native, setNative] = useState(false);
 
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrolled, setEnrolled] = useState<boolean>(false);
+  const [hasUser, setHasUser] = useState<boolean>(false);
   const [userChecked, setUserChecked] = useState(false);
 
   useEffect(() => {
@@ -53,11 +59,27 @@ export default function CoursePreviewPage() {
     (async () => {
       if (!slug) return;
       try {
-        const { data, error } = await supabase
+        const withFree = await supabase
           .from("courses")
-          .select("id,slug,title,description,img,price,cpd_points,published,coming_soon")
+          .select(
+            "id,slug,title,description,img,price,cpd_points,published,coming_soon,free_for_logged_in"
+          )
           .eq("slug", slug)
           .maybeSingle<Course>();
+        let data = withFree.data;
+        let error: unknown = withFree.error;
+
+        if (error && isMissingColumn(error)) {
+          const fallback = await supabase
+            .from("courses")
+            .select("id,slug,title,description,img,price,cpd_points,published,coming_soon")
+            .eq("slug", slug)
+            .maybeSingle<Course>();
+          data = fallback.data
+            ? ({ ...fallback.data, free_for_logged_in: false } as Course)
+            : null;
+          error = fallback.error;
+        }
         if (cancelled) return;
         if (error || !data || data.published !== true) {
           setCourse(null);
@@ -79,7 +101,14 @@ export default function CoursePreviewPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (cancelled) return;
       if (!user) {
+        setHasUser(false);
         setEnrolled(false);
+        setUserChecked(true);
+        return;
+      }
+      setHasUser(true);
+      if (course.free_for_logged_in === true) {
+        setEnrolled(true);
         setUserChecked(true);
         return;
       }
@@ -107,7 +136,7 @@ export default function CoursePreviewPage() {
       setUserChecked(true);
     })();
     return () => { cancelled = true; };
-  }, [slug, course?.id, native]);
+  }, [slug, course?.id, course?.free_for_logged_in, native]);
 
   if (loading) {
     return (
@@ -127,9 +156,10 @@ export default function CoursePreviewPage() {
     );
   }
 
-  const nativeLocked = native && userChecked && !enrolled;
-  const nativeEnrolled = native && userChecked && enrolled;
+  const locked = userChecked && !enrolled;
+  const hasAccess = userChecked && enrolled;
   const comingSoon = course.coming_soon === true;
+  const freeForLoggedIn = course.free_for_logged_in === true;
 
   return (
     <NoInternet>
@@ -152,6 +182,11 @@ export default function CoursePreviewPage() {
               {comingSoon && (
                 <div className="mt-2 inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
                   Coming soon
+                </div>
+              )}
+              {freeForLoggedIn && (
+                <div className="mt-2 inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                  Free for logged-in users
                 </div>
               )}
               {course.description && (
@@ -183,30 +218,47 @@ export default function CoursePreviewPage() {
                   This program will be available soon. Check back later for enrollment.
                 </div>
               </div>
-            ) : native ? (
+            ) : (
               <div className="mt-5 space-y-3 text-sm text-muted">
                 {!userChecked && (
                   <div className="rounded-lg bg-[color:var(--color-light)]/60 p-3">
                     Checking your access…
                   </div>
                 )}
-                {nativeLocked && userChecked && (
+                {locked && userChecked && (
                   <>
                     <div className="rounded-lg bg-[color:var(--color-light)]/60 p-3">
-                      This program is not available in the PanAvest KDS mobile app for this account. Manage enrollments on the web portal at <span className="font-semibold">www.panavestkds.com</span>.
+                      {!hasUser ? (
+                        "Sign in to view linked programs."
+                      ) : (
+                        <>
+                          This program is not linked to this account in the
+                          companion app. Manage enrollments on the web portal at{" "}
+                          <span className="font-semibold">www.panavestkds.com</span>.
+                        </>
+                      )}
                     </div>
-                    <Link
-                      href="/courses"
-                      className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 ring-1 ring-[color:var(--color-light)] hover:bg-[color:var(--color-light)]/50"
-                    >
-                      Back to Programs
-                    </Link>
+                    {!hasUser ? (
+                      <Link
+                        href={`/auth/sign-in?redirect=${encodeURIComponent(`/courses/${course.slug}`)}`}
+                        className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 ring-1 ring-[color:var(--color-light)] hover:bg-[color:var(--color-light)]/50"
+                      >
+                        Sign in
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/courses"
+                        className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 ring-1 ring-[color:var(--color-light)] hover:bg-[color:var(--color-light)]/50"
+                      >
+                        Back to Programs
+                      </Link>
+                    )}
                   </>
                 )}
-                {nativeEnrolled && (
+                {hasAccess && (
                   <>
                     <div className="rounded-lg bg-[color:var(--color-light)]/60 p-3 text-[color:var(--color-text-muted)]">
-                      This mobile app is for viewing programs already on your PanAvest KDS account.
+                      This companion app shows programs already linked to your PanAvest KDS account.
                     </div>
                     <Link
                       href={`/courses/${course.slug}/dashboard`}
@@ -217,13 +269,6 @@ export default function CoursePreviewPage() {
                   </>
                 )}
               </div>
-            ) : (
-              <>
-                <EnrollCTA courseId={course.id} slug={course.slug} className="mt-5 w-full text-center block" />
-                <div className="mt-4 text-xs text-[color:var(--color-text-muted)]">
-                  One-time payment. Access tied to your account.
-                </div>
-              </>
             )}
           </aside>
         </div>

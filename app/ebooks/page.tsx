@@ -17,6 +17,7 @@ type Ebook = {
   cover_url?: string | null;
   price_cents: number;
   published: boolean;
+  linked_status: "paid" | "free";
 };
 
 export default function Ebooks() {
@@ -31,7 +32,7 @@ export default function Ebooks() {
   const [items, setItems] = useState<Ebook[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     try {
@@ -49,50 +50,72 @@ export default function Ebooks() {
   // Keep input synced when user goes back
   useEffect(() => setQ(qParam), [qParam]);
 
-  // Load owned ebooks to mark availability in reader mode
+  // Load account-linked ebooks only (paid/free rows linked to this user)
   useEffect(() => {
     let active = true;
     (async () => {
+      setLoading(true);
+      setErr(null);
       const { data: { user } } = await supabase.auth.getUser();
       if (!active) return;
-      if (!user) { setOwnedIds(new Set()); return; }
+      if (!user) {
+        setIsLoggedIn(false);
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+      setIsLoggedIn(true);
       const { data, error } = await supabase
         .from("ebook_purchases")
-        .select("ebook_id, status")
+        .select(
+          "status, ebook:ebook_id(id,slug,title,description,cover_url,price_cents,published)"
+        )
         .eq("user_id", user.id)
-        .eq("status", "paid");
+        .in("status", ["paid", "free"])
+        .order("updated_at", { ascending: false });
       if (!active) return;
-      if (error || !data) { setOwnedIds(new Set()); return; }
-      setOwnedIds(new Set(data.map((row) => row.ebook_id)));
-    })();
-    return () => { active = false; };
-  }, []);
-
-  // Fetch list whenever the URL (?q=) changes
-  useEffect(() => {
-    (async () => {
-      setLoading(true); setErr(null);
-      try {
-        const r = await fetch(`/api/ebooks${qParam ? `?q=${encodeURIComponent(qParam)}` : ""}`, { cache: "no-store" });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j?.error || r.statusText);
-        setItems(Array.isArray(j) ? j : []);
-        markOnline();
-      } catch (e) {
-        setErr((e as Error).message);
+      if (error || !data) {
+        setErr(error?.message || "Failed to load linked e-books.");
         setItems([]);
         markOffline();
-      } finally {
         setLoading(false);
+        return;
       }
+      const mapped = (data as any[])
+        .map((row) => {
+          const raw = Array.isArray(row?.ebook) ? row.ebook[0] : row?.ebook;
+          if (!raw || raw.published !== true) return null;
+          return {
+            id: raw.id,
+            slug: raw.slug,
+            title: raw.title,
+            description: raw.description ?? null,
+            cover_url: raw.cover_url ?? null,
+            price_cents: Number(raw.price_cents ?? 0),
+            published: true,
+            linked_status: row?.status === "free" ? "free" : "paid",
+          } as Ebook;
+        })
+        .filter(Boolean) as Ebook[];
+      const dedup = new Map<string, Ebook>();
+      for (const b of mapped) dedup.set(b.id, b);
+      setItems(Array.from(dedup.values()));
+      markOnline();
+      setLoading(false);
     })();
-  }, [qParam, markOffline, markOnline]);
+    return () => { active = false; };
+  }, [markOffline, markOnline]);
 
   const filteredItems = useMemo(() => {
     if (!items) return null;
-    const list = native ? items.filter((b) => ownedIds.has(b.id)) : items;
-    return list;
-  }, [items, native, ownedIds]);
+    const needle = qParam.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter(
+      (b) =>
+        b.title.toLowerCase().includes(needle) ||
+        (b.description ?? "").toLowerCase().includes(needle)
+    );
+  }, [items, qParam]);
 
   const headerNote = useMemo(() => {
     if (loading) return "Searching…";
@@ -118,7 +141,7 @@ export default function Ebooks() {
           <p className="mt-1 text-muted max-w-2xl text-sm sm:text-base">
             {isIOS
               ? "This mobile app is a companion reader for the PanAvest KDS platform. Manage purchases on the web portal at www.panavestkds.com; sign in here to open items already on your account."
-              : "Buy to unlock reading. Your purchases appear in the Dashboard."}
+              : "This companion app shows e-books already linked to your account. Manage purchases on www.panavestkds.com."}
           </p>
         </div>
 
@@ -180,7 +203,9 @@ export default function Ebooks() {
                 </p>
                 {native ? null : (
                   <div className="mt-auto pt-2 text-sm font-medium">
-                    GH₵ {(b.price_cents / 100).toFixed(2)}
+                    {b.linked_status === "free"
+                      ? "Linked free access"
+                      : `GH₵ ${(b.price_cents / 100).toFixed(2)}`}
                   </div>
                 )}
               </div>
@@ -191,11 +216,17 @@ export default function Ebooks() {
           )}
         </div>
       )}
-      {native && filteredItems && filteredItems.length === 0 && !loading && (
+      {filteredItems && filteredItems.length === 0 && !loading && (
         <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-5 text-amber-900">
-          <div className="font-semibold">No e-books are available in this mobile app yet.</div>
+          <div className="font-semibold">
+            {isLoggedIn
+              ? "No linked e-books found for this account."
+              : "Sign in to view linked e-books."}
+          </div>
           <p className="mt-1 text-sm">
-            Add e-books to your PanAvest KDS account on www.panavestkds.com, then sign in here to read them.
+            {isLoggedIn
+              ? "This companion app only shows e-books already linked to your account on www.panavestkds.com."
+              : "Use your PanAvest KDS account to sign in."}
           </p>
         </div>
       )}

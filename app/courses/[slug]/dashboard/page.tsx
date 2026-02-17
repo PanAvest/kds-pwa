@@ -40,6 +40,7 @@ type Course = {
   delivery_mode: string | null;
   interactive_path: string | null;
   coming_soon?: boolean | null;
+  free_for_logged_in?: boolean | null;
 };
 type Chapter = { id: string; title: string; order_index: number; intro_video_url: string | null };
 type Slide = {
@@ -109,6 +110,11 @@ const isPdfUrl = (url?: string | null) => {
   const stripped = url.split("#")[0]?.split("?")[0] ?? "";
   return stripped.toLowerCase().endsWith(".pdf");
 };
+const isMissingColumn = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  (error as { code?: string }).code === "42703";
 
 /* ====================== Media Player ====================== */
 function VideoPlayer({
@@ -249,25 +255,48 @@ export default function CourseDashboard() {
       try {
 
       // course
-      const { data: c } = await supabase
+      const withFree = await supabase
         .from("courses")
-        .select("id,slug,title,img,delivery_mode,interactive_path,coming_soon")
+        .select(
+          "id,slug,title,img,delivery_mode,interactive_path,coming_soon,free_for_logged_in"
+        )
         .eq("slug", String(slug))
         .maybeSingle<Course>();
-      if (!c) { router.push("/courses"); return; }
-      setCourse({ ...c, coming_soon: c.coming_soon ?? false });
+      let c = withFree.data;
+      let courseErr: unknown = withFree.error;
 
-      // paywall: enrollment must be paid
-      const { data: enr, error: enrErr } = await supabase
-        .from("enrollments")
-        .select("paid")
-        .eq("user_id", userId)
-        .eq("course_id", c.id)
-        .maybeSingle<{ paid: boolean | null }>();
-      if (enrErr || !enr || enr.paid !== true) {
-        if (enrErr) flagOfflineFromError(enrErr);
-        router.replace(`/courses/${c.slug}/enroll`);
-        return;
+      if (courseErr && isMissingColumn(courseErr)) {
+        const fallback = await supabase
+          .from("courses")
+          .select("id,slug,title,img,delivery_mode,interactive_path,coming_soon")
+          .eq("slug", String(slug))
+          .maybeSingle<Course>();
+        c = fallback.data
+          ? ({ ...fallback.data, free_for_logged_in: false } as Course)
+          : null;
+        courseErr = fallback.error;
+      }
+      if (courseErr) flagOfflineFromError(courseErr);
+      if (!c) { router.push("/courses"); return; }
+      setCourse({
+        ...c,
+        coming_soon: c.coming_soon ?? false,
+        free_for_logged_in: c.free_for_logged_in ?? false,
+      });
+
+      // paywall: account must already be linked to this course.
+      if (c.free_for_logged_in !== true) {
+        const { data: enr, error: enrErr } = await supabase
+          .from("enrollments")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("course_id", c.id)
+          .maybeSingle();
+        if (enrErr || !enr) {
+          if (enrErr) flagOfflineFromError(enrErr);
+          router.replace("/courses");
+          return;
+        }
       }
 
       // chapters
