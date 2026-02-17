@@ -44,11 +44,10 @@ export async function GET(req: Request) {
     const { data, error } = await supabase
       .from("ebook_purchases")
       .select(
-        "status, ebooks:ebook_id(id, slug, title, description, cover_url, price_cents, published)"
+        "ebook_id,status,ebooks!inner(id,slug,title,description,cover_url,price_cents,published)"
       )
       .eq("user_id", userInfo.user.id)
-      .in("status", ["paid", "free"])
-      .order("updated_at", { ascending: false });
+      .in("status", ["paid", "free"]);
 
     if (error) throw error;
 
@@ -70,7 +69,20 @@ export async function GET(req: Request) {
           linked_status: row?.status === "free" ? "free" : "paid",
         };
       })
-      .filter(Boolean);
+      .filter(
+        (
+          row
+        ): row is {
+          id: string;
+          slug: string;
+          title: string;
+          description: string | null;
+          cover_url: string | null;
+          price_cents: number;
+          published: true;
+          linked_status: "paid" | "free";
+        } => row !== null
+      );
 
     const dedup = new Map<string, any>();
     for (const row of mapped) dedup.set(row.id, row);

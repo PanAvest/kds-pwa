@@ -3,7 +3,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { isNativeApp, isNativeIOSApp } from "@/lib/nativePlatform";
@@ -33,6 +33,23 @@ export default function Ebooks() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const markOfflineIfNetwork = useCallback((e: unknown) => {
+    const msg =
+      typeof e === "object" && e !== null && "message" in e
+        ? String((e as { message?: unknown }).message ?? "")
+        : String(e ?? "");
+    const lower = msg.toLowerCase();
+    if (
+      lower.includes("network") ||
+      lower.includes("fetch") ||
+      lower.includes("failed to fetch") ||
+      lower.includes("offline")
+    ) {
+      markOffline();
+    } else {
+      markOnline();
+    }
+  }, [markOffline, markOnline]);
 
   useEffect(() => {
     try {
@@ -56,55 +73,76 @@ export default function Ebooks() {
     (async () => {
       setLoading(true);
       setErr(null);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!active) return;
-      if (!user) {
-        setIsLoggedIn(false);
-        setItems([]);
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+        if (!active) return;
+        if (authError) {
+          setErr(authError.message || "Failed to check sign-in status.");
+          setIsLoggedIn(false);
+          setItems([]);
+          markOfflineIfNetwork(authError);
+          setLoading(false);
+          return;
+        }
+        if (!user) {
+          setIsLoggedIn(false);
+          setItems([]);
+          markOnline();
+          setLoading(false);
+          return;
+        }
+        setIsLoggedIn(true);
+
+        const { data, error } = await supabase
+          .from("ebook_purchases")
+          .select(
+            "ebook_id,status,ebooks!inner(id,slug,title,description,cover_url,price_cents,published)"
+          )
+          .eq("user_id", user.id)
+          .in("status", ["paid", "free"]);
+        if (!active) return;
+        if (error || !data) {
+          setErr(error?.message || "Failed to load linked e-books.");
+          setItems([]);
+          markOfflineIfNetwork(error);
+          setLoading(false);
+          return;
+        }
+
+        const mapped = (data as any[])
+          .map((row) => {
+            const raw = Array.isArray(row?.ebooks) ? row.ebooks[0] : row?.ebooks;
+            if (!raw || raw.published !== true) return null;
+            return {
+              id: raw.id,
+              slug: raw.slug,
+              title: raw.title,
+              description: raw.description ?? null,
+              cover_url: raw.cover_url ?? null,
+              price_cents: Number(raw.price_cents ?? 0),
+              published: true,
+              linked_status: row?.status === "free" ? "free" : "paid",
+            } as Ebook;
+          })
+          .filter(Boolean) as Ebook[];
+        const dedup = new Map<string, Ebook>();
+        for (const b of mapped) dedup.set(b.id, b);
+        setItems(Array.from(dedup.values()));
+        markOnline();
         setLoading(false);
-        return;
-      }
-      setIsLoggedIn(true);
-      const { data, error } = await supabase
-        .from("ebook_purchases")
-        .select(
-          "status, ebook:ebook_id(id,slug,title,description,cover_url,price_cents,published)"
-        )
-        .eq("user_id", user.id)
-        .in("status", ["paid", "free"])
-        .order("updated_at", { ascending: false });
-      if (!active) return;
-      if (error || !data) {
-        setErr(error?.message || "Failed to load linked e-books.");
+      } catch (e) {
+        if (!active) return;
+        setErr((e as Error).message || "Failed to load linked e-books.");
         setItems([]);
-        markOffline();
+        markOfflineIfNetwork(e);
         setLoading(false);
-        return;
       }
-      const mapped = (data as any[])
-        .map((row) => {
-          const raw = Array.isArray(row?.ebook) ? row.ebook[0] : row?.ebook;
-          if (!raw || raw.published !== true) return null;
-          return {
-            id: raw.id,
-            slug: raw.slug,
-            title: raw.title,
-            description: raw.description ?? null,
-            cover_url: raw.cover_url ?? null,
-            price_cents: Number(raw.price_cents ?? 0),
-            published: true,
-            linked_status: row?.status === "free" ? "free" : "paid",
-          } as Ebook;
-        })
-        .filter(Boolean) as Ebook[];
-      const dedup = new Map<string, Ebook>();
-      for (const b of mapped) dedup.set(b.id, b);
-      setItems(Array.from(dedup.values()));
-      markOnline();
-      setLoading(false);
     })();
     return () => { active = false; };
-  }, [markOffline, markOnline]);
+  }, [markOffline, markOnline, markOfflineIfNetwork]);
 
   const filteredItems = useMemo(() => {
     if (!items) return null;
