@@ -322,6 +322,7 @@ class MainViewController: CAPBridgeViewController {
 
         webView.scrollView.contentInset = inset
         webView.scrollView.scrollIndicatorInsets = inset
+        injectNativeBottomBarOffset()
     }
 
     // MARK: - Splash handling
@@ -432,6 +433,8 @@ class MainViewController: CAPBridgeViewController {
 
     private func injectViewportAndSelectionJS() {
         guard let webView = bridge?.webView as? WKWebView else { return }
+        let safeBottom: CGFloat = view.safeAreaInsets.bottom
+        let bottomOffset = max(bottomBarHeight - safeBottom, 0)
 
         let js = """
         (function(){
@@ -468,8 +471,35 @@ class MainViewController: CAPBridgeViewController {
               }
             `;
             document.head.appendChild(style);
+
+            var root = document.documentElement;
+            if (root) {
+              root.style.setProperty('--kds-native-bottom-offset', '\(String(format: "%.2f", bottomOffset))px');
+              root.style.setProperty('--kds-native-tabbar-height', '\(String(format: "%.2f", bottomBarHeight))px');
+            }
           } catch (e) {
             console.log('KDS iOS inject error', e);
+          }
+        })();
+        """
+
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    private func injectNativeBottomBarOffset() {
+        guard let webView = bridge?.webView as? WKWebView else { return }
+        let safeBottom: CGFloat = view.safeAreaInsets.bottom
+        let bottomOffset = max(bottomBarHeight - safeBottom, 0)
+
+        let js = """
+        (function() {
+          try {
+            var root = document.documentElement;
+            if (!root) { return; }
+            root.style.setProperty('--kds-native-bottom-offset', '\(String(format: "%.2f", bottomOffset))px');
+            root.style.setProperty('--kds-native-tabbar-height', '\(String(format: "%.2f", bottomBarHeight))px');
+          } catch (e) {
+            console.log('KDS iOS inset inject error', e);
           }
         })();
         """
@@ -492,6 +522,8 @@ extension MainViewController: WKNavigationDelegate, WKScriptMessageHandler, WKUI
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         originalNavigationDelegate?.webView?(webView, didFinish: navigation)
+        injectViewportAndSelectionJS()
+        injectNativeBottomBarOffset()
         sendNativeReadyEventToWebView()
         hideSplashScreenIfReady()
     }

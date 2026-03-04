@@ -1016,8 +1016,10 @@ export default function PanavestAiClient() {
     }
   };
 
-  const composerPadding = "calc(8.75rem + env(safe-area-inset-bottom))";
-  const bottomSafeArea = "calc(1rem + env(safe-area-inset-bottom))";
+  const composerBottomInset =
+    "calc(var(--kds-native-bottom-offset, 0px) + env(safe-area-inset-bottom, 0px) + 0.375rem)";
+  const composerPadding =
+    "calc(var(--kds-native-bottom-offset, 0px) + env(safe-area-inset-bottom, 0px) + 8.75rem)";
 
   return (
     <>
@@ -1184,7 +1186,7 @@ export default function PanavestAiClient() {
 
         <div
           className="pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[color:var(--color-bg)] via-[color:var(--color-bg)]/94 to-transparent px-4 pt-8 sm:px-6"
-          style={{ paddingBottom: bottomSafeArea }}
+          style={{ paddingBottom: composerBottomInset }}
         >
           <div className="pointer-events-auto mx-auto max-w-4xl">
             {suggestions.length > 0 ? (
