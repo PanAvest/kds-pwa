@@ -326,6 +326,15 @@ export default function HomePage() {
               assessments, and verifiable certificates.
             </p>
 
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Link href="/panavest-ai">
+                <Button className="min-w-[144px] text-sm sm:text-base">PanAvest AI</Button>
+              </Link>
+              <span className="text-sm text-[color:var(--color-text-muted)]">
+                Mobile supply chain dictionary with AI explanations.
+              </span>
+            </div>
+
             {isNativeIOS && (
               <div className="mt-4 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-[0_8px_24px_-16px_rgba(0,0,0,0.25)]">
                 <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">PanAvest KDS mobile access</div>
