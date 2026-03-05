@@ -434,6 +434,7 @@ class MainViewController: CAPBridgeViewController {
     private func injectViewportAndSelectionJS() {
         guard let webView = bridge?.webView as? WKWebView else { return }
         let safeBottom: CGFloat = view.safeAreaInsets.bottom
+        let safeTop: CGFloat = view.safeAreaInsets.top
         let bottomOffset = max(bottomBarHeight - safeBottom, 0)
 
         let js = """
@@ -474,6 +475,7 @@ class MainViewController: CAPBridgeViewController {
 
             var root = document.documentElement;
             if (root) {
+              root.style.setProperty('--kds-native-top-offset', '\(String(format: "%.2f", safeTop))px');
               root.style.setProperty('--kds-native-bottom-offset', '\(String(format: "%.2f", bottomOffset))px');
               root.style.setProperty('--kds-native-tabbar-height', '\(String(format: "%.2f", bottomBarHeight))px');
             }
@@ -489,6 +491,7 @@ class MainViewController: CAPBridgeViewController {
     private func injectNativeBottomBarOffset() {
         guard let webView = bridge?.webView as? WKWebView else { return }
         let safeBottom: CGFloat = view.safeAreaInsets.bottom
+        let safeTop: CGFloat = view.safeAreaInsets.top
         let bottomOffset = max(bottomBarHeight - safeBottom, 0)
 
         let js = """
@@ -496,6 +499,7 @@ class MainViewController: CAPBridgeViewController {
           try {
             var root = document.documentElement;
             if (!root) { return; }
+            root.style.setProperty('--kds-native-top-offset', '\(String(format: "%.2f", safeTop))px');
             root.style.setProperty('--kds-native-bottom-offset', '\(String(format: "%.2f", bottomOffset))px');
             root.style.setProperty('--kds-native-tabbar-height', '\(String(format: "%.2f", bottomBarHeight))px');
           } catch (e) {

@@ -1016,10 +1016,11 @@ export default function PanavestAiClient() {
     }
   };
 
-  const composerBottomInset =
-    "calc(var(--kds-native-bottom-offset, 0px) + env(safe-area-inset-bottom, 0px) + 0.375rem)";
-  const composerPadding =
-    "calc(var(--kds-native-bottom-offset, 0px) + env(safe-area-inset-bottom, 0px) + 8.75rem)";
+  const topUiInset = "max(var(--kds-native-top-offset, 0px), env(safe-area-inset-top, 0px))";
+  const bottomUiInset =
+    "max(var(--kds-native-tabbar-height, 0px), calc(var(--kds-native-bottom-offset, 0px) + env(safe-area-inset-bottom, 0px)))";
+  const composerBottomInset = `calc(${bottomUiInset} + 0.375rem)`;
+  const composerPadding = `calc(${bottomUiInset} + 8.75rem)`;
 
   return (
     <>
@@ -1036,7 +1037,10 @@ export default function PanavestAiClient() {
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleDrop}
       >
-        <header className="sticky top-0 z-20 border-b border-white/60 bg-[rgba(254,253,250,0.92)] px-4 py-3 backdrop-blur sm:px-6">
+        <header
+          className="sticky top-0 z-20 border-b border-white/60 bg-[rgba(254,253,250,0.92)] px-4 pb-3 backdrop-blur sm:px-6"
+          style={{ paddingTop: `calc(${topUiInset} + 0.75rem)` }}
+        >
           <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <Link
