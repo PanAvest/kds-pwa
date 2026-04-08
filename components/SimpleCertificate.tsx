@@ -176,6 +176,8 @@ export default function SimpleCertificate({
 
           {resolvedQr ? (
             <div className="text-right">
+              {/* QR providers can return remote URLs or data URLs, so a plain img keeps the print path stable. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={resolvedQr}
                 alt="QR code"

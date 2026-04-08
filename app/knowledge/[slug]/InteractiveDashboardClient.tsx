@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const MAIN_ORIGIN = (
-  process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://panavestkds.com"
+  process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN || "https://www.panavestkds.com"
 ).replace(/\/+$/, "");
 const INTERACTIVE_PROXY_VERSION = "20260217-2";
 
@@ -99,18 +99,10 @@ export function InteractiveDashboardClient({
             onError={() => setIframeStatus("error")}
           />
 
-          {iframeStatus === "error" && absolute && (
+          {iframeStatus === "error" && (
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              The interactive module failed to load in-app.
-              <a
-                href={absolute}
-                target="_blank"
-                rel="noreferrer"
-                className="ml-1 underline"
-              >
-                Open directly
-              </a>
-              .
+              The interactive module failed to load in-app. Please retry or
+              contact support if the issue continues.
             </div>
           )}
         </div>

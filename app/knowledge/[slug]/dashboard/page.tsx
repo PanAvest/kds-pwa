@@ -10,7 +10,8 @@
 // (client component) to surface URL + load/error state inside the native shell.
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
-export { runtime, preferredRegion } from "@/app/edge-no-rsc";
+export const runtime = "edge";
+export const preferredRegion = "auto";
 
 import { createServerClient } from "@/lib/supabaseServer";
 import { InteractiveDashboardClient } from "../InteractiveDashboardClient";
@@ -27,9 +28,9 @@ type Course = {
 export default async function KnowledgeDashboardPage({
   params,
 }: {
-  params: Params;
+  params: Promise<Params>;
 }) {
-  const slug = params?.slug;
+  const { slug } = await params;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

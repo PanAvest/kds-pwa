@@ -3,7 +3,8 @@
 "use client";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
-export { runtime, preferredRegion } from "@/app/edge-no-rsc";
+export const runtime = "edge";
+export const preferredRegion = "auto";
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
@@ -11,7 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 import NoInternet, { useOfflineMonitor } from "@/components/NoInternet";
 import { supabase } from "@/lib/supabaseClient";
 import { InteractiveDashboardClient } from "../../../knowledge/[slug]/InteractiveDashboardClient";
-import { isNativeApp } from "@/lib/nativePlatform";
+import { isNativeApp, isNativeIOSApp } from "@/lib/nativePlatform";
 import PdfPageViewer from "@/components/pdf/PdfPageViewer";
 
 /* ------------------------------------------------------------------ */
@@ -124,43 +125,180 @@ function VideoPlayer({
   src: string;
   poster?: string | null;
 }) {
-  const ref = useRef<HTMLVideoElement | null>(null);
+  const inlineRef = useRef<HTMLVideoElement | null>(null);
+  const fullscreenRef = useRef<HTMLVideoElement | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const onLoadedMetadata = () => {
-    try {
-      if (!ref.current) return;
-      if (ref.current.currentTime === 0) ref.current.currentTime = 0.001;
-    } catch {}
+  const [showFullscreen, setShowFullscreen] = useState(false);
+  const [resumeTime, setResumeTime] = useState(0);
+  const [resumePlaying, setResumePlaying] = useState(false);
+  const nativeIOS = useMemo(() => isNativeIOSApp(), []);
+
+  const primeVideo = useCallback(
+    (video: HTMLVideoElement | null, seekTo = 0, shouldPlay = false) => {
+      if (!video) return;
+      try {
+        video.setAttribute("playsinline", "true");
+        video.setAttribute("webkit-playsinline", "true");
+        if (seekTo > 0) video.currentTime = seekTo;
+        else if (video.currentTime === 0) video.currentTime = 0.001;
+        if (shouldPlay) {
+          const playAttempt = video.play();
+          if (playAttempt && typeof playAttempt.catch === "function") {
+            playAttempt.catch(() => {});
+          }
+        }
+      } catch {}
+    },
+    []
+  );
+
+  useEffect(() => {
+    setError(null);
+    setShowFullscreen(false);
+    setResumeTime(0);
+    setResumePlaying(false);
+  }, [src]);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    if (showFullscreen) document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showFullscreen]);
+
+  const onLoadedMetadata = (video: HTMLVideoElement | null) => {
+    primeVideo(video);
   };
+
+  const openFullscreen = () => {
+    const video = inlineRef.current;
+    const nextTime = video?.currentTime ?? 0;
+    const nextPlaying = !!video && !video.paused;
+    video?.pause();
+    setResumeTime(nextTime);
+    setResumePlaying(nextPlaying);
+    setShowFullscreen(true);
+  };
+
+  const closeFullscreen = () => {
+    const video = fullscreenRef.current;
+    const nextTime = video?.currentTime ?? resumeTime;
+    const nextPlaying = !!video && !video.paused;
+    video?.pause();
+    setShowFullscreen(false);
+    setResumeTime(nextTime);
+    setResumePlaying(nextPlaying);
+    window.requestAnimationFrame(() => {
+      primeVideo(inlineRef.current, nextTime, nextPlaying);
+    });
+  };
+
+  const controlsList = nativeIOS
+    ? "nodownload noremoteplayback nofullscreen"
+    : "nodownload noremoteplayback";
+
+  const videoError =
+    "The video couldn't load here. Use the link below to open in a new tab.";
+
   return (
     <div className="w-full rounded-lg overflow-hidden">
+      {nativeIOS && (
+        <style jsx global>{`
+          .kds-inline-video::-webkit-media-controls-fullscreen-button {
+            display: none !important;
+          }
+        `}</style>
+      )}
+
       <div className="relative w-full aspect-video bg-black">
         {!error ? (
           <video
-            ref={ref}
-            className="absolute inset-0 h-full w-full object-contain"
+            key={src}
+            ref={inlineRef}
+            className="kds-inline-video absolute inset-0 h-full w-full object-contain"
             playsInline
             preload="metadata"
             controls
-            controlsList="nodownload"
+            controlsList={controlsList}
             crossOrigin="anonymous"
+            disablePictureInPicture={nativeIOS}
+            disableRemotePlayback={nativeIOS}
             muted={false}
             poster={poster ?? undefined}
             src={src}
-            onLoadedMetadata={onLoadedMetadata}
-            onError={() => setError("The video couldn't load here. Use the link below to open in a new tab.")}
+            onLoadedMetadata={() => onLoadedMetadata(inlineRef.current)}
+            onError={() => setError(videoError)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="text-center text-xs md:text-sm text-white/90">{error}</div>
+            <div className="text-center text-xs md:text-sm text-white/90">
+              {error}
+            </div>
           </div>
         )}
       </div>
+
+      {nativeIOS && !error && (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={openFullscreen}
+            className="rounded-lg border border-[color:var(--color-light)] px-3 py-2 text-xs font-medium active:scale-[0.98]"
+          >
+            Fullscreen
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="mt-2 text-xs">
           <a href={src} target="_blank" rel="noreferrer" className="underline break-all">
             Open the video in a new tab
           </a>
+        </div>
+      )}
+
+      {showFullscreen && (
+        <div className="fixed inset-0 z-[70] bg-black">
+          <div
+            className="flex items-center justify-between gap-3 px-4 py-3 text-white"
+            style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+          >
+            <div className="text-sm font-medium">Fullscreen video</div>
+            <button
+              type="button"
+              onClick={closeFullscreen}
+              className="rounded-lg border border-white/40 px-3 py-2 text-xs font-medium"
+            >
+              Close
+            </button>
+          </div>
+          <div
+            className="flex h-[calc(100%-4.5rem)] items-center justify-center px-3 pb-3"
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))" }}
+          >
+            <video
+              key={`fullscreen:${src}`}
+              ref={fullscreenRef}
+              className="h-full w-full object-contain"
+              playsInline
+              preload="metadata"
+              controls
+              controlsList="nodownload noremoteplayback"
+              crossOrigin="anonymous"
+              muted={false}
+              poster={poster ?? undefined}
+              src={src}
+              onLoadedMetadata={() =>
+                primeVideo(fullscreenRef.current, resumeTime, resumePlaying)
+              }
+              onError={() => {
+                setShowFullscreen(false);
+                setError(videoError);
+              }}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -462,7 +600,7 @@ export default function CourseDashboard() {
     })();
   }, [userId, slug, router, flagOfflineFromError, markOnline]);
 
-  /* ========= Derived orders & gating ========= */
+  /* ========= Derived slide order ========= */
   const orderedSlides = useMemo(() => slides, [slides]);
   const orderedIds = useMemo(() => orderedSlides.map(s => s.id), [orderedSlides]);
 
@@ -472,41 +610,11 @@ export default function CourseDashboard() {
     return map;
   }, [orderedSlides]);
 
-  const chapterOrder = useMemo(() => {
-    return [...chapters].sort((a,b)=> (a.order_index??0)-(b.order_index??0)).map(c=>c.id);
-  }, [chapters]);
-
   const chapterLastSlideIndex: Record<string, number> = useMemo(() => {
     const idx: Record<string, number> = {};
     orderedSlides.forEach((s, i) => { idx[s.chapter_id] = i; });
     return idx;
   }, [orderedSlides]);
-
-  const firstIncompleteIndex = useMemo(() => {
-    for (let i = 0; i < orderedIds.length; i++) {
-      if (!completed.includes(orderedIds[i])) return i;
-    }
-    return Math.max(0, orderedIds.length - 1);
-  }, [orderedIds, completed]);
-
-  const boundaryLockedIndex = useMemo(() => {
-    for (let i = 0; i < chapterOrder.length; i++) {
-      const chId = chapterOrder[i];
-      const slidesInCh = slidesByChapter[chId] ?? [];
-      if (slidesInCh.length === 0) continue;
-      const allDone = slidesInCh.every(s => completed.includes(s.id));
-      const quizDone = completedQuizzes.includes(chId);
-      if (allDone && !quizDone) return chapterLastSlideIndex[chId] ?? firstIncompleteIndex;
-    }
-    return Math.max(0, orderedIds.length - 1);
-  }, [chapterOrder, slidesByChapter, completed, completedQuizzes, chapterLastSlideIndex, orderedIds.length, firstIncompleteIndex]);
-
-  const maxAccessibleIndex = Math.min(firstIncompleteIndex, boundaryLockedIndex);
-  const canAccessById = useCallback((slideId: string) => {
-    const idx = orderedIds.indexOf(slideId);
-    if (idx === -1) return false;
-    return idx <= maxAccessibleIndex;
-  }, [orderedIds, maxAccessibleIndex]);
 
   const totalSlides = orderedSlides.length;
   const done = completed.length;
@@ -523,6 +631,14 @@ export default function CourseDashboard() {
       window.removeEventListener("online", onlineHandler);
       window.removeEventListener("offline", offlineHandler);
     };
+  }, []);
+
+  const openSlide = useCallback((slide: Slide | null) => {
+    if (!slide) return;
+    setActiveSlide(slide);
+    setChaptersOpen(false);
+    setNotice("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
   /* ========= Mark done ========= */
@@ -547,7 +663,10 @@ export default function CourseDashboard() {
         setTimeout(() => setNotice(""), 2200);
         return;
       }
-      setCompleted(prev => (prev.includes(slide.id) ? prev : [...prev, slide.id]));
+      const nextCompleted = completed.includes(slide.id)
+        ? completed
+        : [...completed, slide.id];
+      setCompleted(nextCompleted);
       const key = progressKey(userId, course.id);
       const existing = JSON.parse(localStorage.getItem(key) ?? "[]") as string[];
       const merged = Array.from(new Set([...existing, slide.id]));
@@ -555,11 +674,7 @@ export default function CourseDashboard() {
       setNotice("Marked as done ✓");
       const idx = orderedIds.indexOf(slide.id);
       if (idx > -1 && idx + 1 < orderedIds.length) {
-        const next = orderedSlides[idx + 1];
-        if (canAccessById(next.id)) {
-          setActiveSlide(next);
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }
+        openSlide(orderedSlides[idx + 1]);
       }
       setTimeout(() => setNotice(""), 1400);
     } catch (e: unknown) {
@@ -611,6 +726,8 @@ export default function CourseDashboard() {
         quizTickRef.current = null;
       }
     };
+    // Intentionally tied to open/tick state so the active timer is not recreated on every answer mutation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizOpen, quizTickOn]);
 
   async function submitQuiz(auto = false) {
@@ -777,6 +894,8 @@ export default function CourseDashboard() {
       }
       bindGuards(false);
     };
+    // Intentionally tied to open state so the exam timer/guards remain stable during answer changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalExamOpen]);
 
   async function submitFinalExam(auto = false) {
@@ -811,19 +930,13 @@ export default function CourseDashboard() {
   }
 
   /* ========= Navigation helpers ========= */
-  const trySelectSlide = (s: Slide) => {
-    if (canAccessById(s.id)) {
-      setActiveSlide(s);
-      setChaptersOpen(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      setNotice("Complete the previous slide or chapter quiz first.");
-      setTimeout(() => setNotice(""), 1500);
-    }
-  };
   const activeIndex = activeSlide ? orderedIds.indexOf(activeSlide.id) : -1;
-  const canGoPrev = activeIndex > 0;
-  const canGoNext = activeIndex > -1 && (activeIndex + 1) <= maxAccessibleIndex;
+  const previousSlide = activeIndex > 0 ? orderedSlides[activeIndex - 1] : null;
+  const nextSlide = activeIndex > -1 && activeIndex + 1 < orderedSlides.length
+    ? orderedSlides[activeIndex + 1]
+    : null;
+  const canGoPrev = previousSlide !== null;
+  const canGoNext = nextSlide !== null;
   const isLastSlideOfChapter = useMemo(() => {
     if (!activeSlide) return false;
     const lastIdx = chapterLastSlideIndex[activeSlide.chapter_id];
@@ -966,21 +1079,18 @@ export default function CourseDashboard() {
                   {(slidesByChapter[ch.id] ?? []).map((s) => {
                     const isActive = activeSlide?.id === s.id;
                     const isDone = completed.includes(s.id);
-                    const isLocked = !canAccessById(s.id);
                     return (
                       <li key={s.id}>
                         <button
                           type="button"
-                          disabled={isLocked}
                           className={[
                             "w-full text-left text-sm px-3 py-2 rounded-md",
                             isActive ? "bg-[color:var(--color-light)]" : "hover:bg-[color:var(--color-light)]/70",
-                            isLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                            "cursor-pointer"
                           ].join(" ")}
-                          onClick={() => trySelectSlide(s)}
-                          aria-disabled={isLocked}
+                          onClick={() => openSlide(s)}
                         >
-                          {isDone ? "✓ " : (isLocked ? "🔒 " : "")}{s.title}
+                          {isDone ? "✓ " : ""}{s.title}
                         </button>
                       </li>
                     );
@@ -1010,7 +1120,7 @@ export default function CourseDashboard() {
                 <div className="hidden sm:flex gap-2">
                   <button
                     type="button"
-                    onClick={() => { if (canGoPrev) setActiveSlide(orderedSlides[activeIndex - 1]); }}
+                    onClick={() => openSlide(previousSlide)}
                     disabled={!canGoPrev}
                     className={`rounded-lg border px-3 py-1.5 text-sm ${canGoPrev ? "hover:bg-[color:var(--color-light)]/70" : "opacity-50 cursor-not-allowed"}`}
                     aria-label="Previous slide"
@@ -1019,10 +1129,7 @@ export default function CourseDashboard() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (canGoNext) setActiveSlide(orderedSlides[activeIndex + 1]);
-                      else setNotice("Complete this slide or the chapter quiz first.");
-                    }}
+                    onClick={() => openSlide(nextSlide)}
                     disabled={!canGoNext}
                     className={`rounded-lg border px-3 py-1.5 text-sm ${canGoNext ? "hover:bg-[color:var(--color-light)]/70" : "opacity-50 cursor-not-allowed"}`}
                     aria-label="Next slide"
@@ -1044,7 +1151,7 @@ export default function CourseDashboard() {
                   <div className="mt-3 grid gap-3">
                     {video && (
                       <div>
-                        <VideoPlayer src={video} poster={null} />
+                        <VideoPlayer key={video} src={video} poster={null} />
                       </div>
                     )}
 
@@ -1114,9 +1221,7 @@ export default function CourseDashboard() {
                 <div className="mt-3 grid grid-cols-3 gap-2 sm:hidden">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (canGoPrev) setActiveSlide(orderedSlides[activeIndex - 1]);
-                    }}
+                    onClick={() => openSlide(previousSlide)}
                     disabled={!canGoPrev}
                     className={`rounded-lg border px-3 py-3 text-sm ${
                       canGoPrev ? "active:scale-[0.98]" : "opacity-50 cursor-not-allowed"
@@ -1135,13 +1240,7 @@ export default function CourseDashboard() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      if (canGoNext) {
-                        setActiveSlide(orderedSlides[activeIndex + 1]);
-                      } else {
-                        setNotice("Complete this slide or the chapter quiz first.");
-                      }
-                    }}
+                    onClick={() => openSlide(nextSlide)}
                     disabled={!canGoNext}
                     className={`rounded-lg border px-3 py-3 text-sm ${
                       canGoNext ? "active:scale-[0.98]" : "opacity-50 cursor-not-allowed"
@@ -1173,7 +1272,7 @@ export default function CourseDashboard() {
           <div className="mx-auto max-w-screen-2xl px-4 py-2 grid grid-cols-3 gap-2">
             <button
               type="button"
-              onClick={() => { if (canGoPrev) setActiveSlide(orderedSlides[activeIndex - 1]); }}
+              onClick={() => openSlide(previousSlide)}
               disabled={!canGoPrev}
               className={`rounded-lg border px-3 py-3 text-sm ${canGoPrev ? "active:scale-[0.98]" : "opacity-50 cursor-not-allowed"}`}
             >
@@ -1188,10 +1287,7 @@ export default function CourseDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (canGoNext) setActiveSlide(orderedSlides[activeIndex + 1]);
-                else setNotice("Complete this slide or the chapter quiz first.");
-              }}
+              onClick={() => openSlide(nextSlide)}
               disabled={!canGoNext}
               className={`rounded-lg border px-3 py-3 text-sm ${canGoNext ? "active:scale-[0.98]" : "opacity-50 cursor-not-allowed"}`}
             >
@@ -1239,21 +1335,18 @@ export default function CourseDashboard() {
                     {(slidesByChapter[ch.id] ?? []).map((s) => {
                       const isActive = activeSlide?.id === s.id;
                       const isDone = completed.includes(s.id);
-                      const isLocked = !canAccessById(s.id);
                       return (
                         <li key={s.id}>
                           <button
                             type="button"
-                            disabled={isLocked}
                             className={[
                               "w-full text-left text-sm px-3 py-2 rounded-md",
                               isActive ? "bg-[color:var(--color-light)]" : "hover:bg-[color:var(--color-light)]/70",
-                              isLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                              "cursor-pointer"
                             ].join(" ")}
-                            onClick={() => trySelectSlide(s)}
-                            aria-disabled={isLocked}
+                            onClick={() => openSlide(s)}
                           >
-                            {isDone ? "✓ " : (isLocked ? "🔒 " : "")}{s.title}
+                            {isDone ? "✓ " : ""}{s.title}
                           </button>
                         </li>
                       );

@@ -1,16 +1,14 @@
 // File: public/firebase-messaging-sw.js
-/* Firebase messaging service worker */
-importScripts('https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js')
-importScripts('https://www.gstatic.com/firebasejs/10.12.3/firebase-messaging-compat.js')
+// Push notifications are disabled for this release.
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
 
-firebase.initializeApp({
-  apiKey: self.location.search.includes('k=') ? "" : "",
-  messagingSenderId: ""
-})
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
-const messaging = firebase.messaging()
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close()
-  event.waitUntil(clients.openWindow('/notifications'))
-})
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.openWindow("/notifications"));
+});

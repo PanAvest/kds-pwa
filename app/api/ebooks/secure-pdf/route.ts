@@ -6,6 +6,18 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type EbookAssetRow = {
+  id: string;
+  published: boolean;
+  sample_url?: string | null;
+  pdf_url?: string | null;
+  file_url?: string | null;
+  asset_url?: string | null;
+  download_url?: string | null;
+  full_url?: string | null;
+  private_url?: string | null;
+};
+
 // Create a Supabase client that runs RLS as the user (forward the access token)
 function supabaseForToken(accessToken: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -14,6 +26,48 @@ function supabaseForToken(accessToken: string) {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
+}
+
+function normalizeAssetUrl(raw: string | null | undefined) {
+  const value = raw?.trim();
+  if (!value) return null;
+
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  if (/^\/?storage\/v1\//i.test(value)) {
+    return new URL(value.replace(/^\/+/, ""), process.env.NEXT_PUBLIC_SUPABASE_URL!).toString();
+  }
+
+  if (value.startsWith("/")) {
+    const base =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN ||
+      "https://www.panavestkds.com";
+    return new URL(value, base).toString();
+  }
+
+  return value;
+}
+
+function resolveProtectedPdfUrl(ebook: EbookAssetRow) {
+  const candidates = [
+    ebook.pdf_url,
+    ebook.file_url,
+    ebook.asset_url,
+    ebook.download_url,
+    ebook.full_url,
+    ebook.private_url,
+    ebook.sample_url,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeAssetUrl(candidate);
+    if (normalized) return normalized;
+  }
+
+  return null;
 }
 
 export async function GET(req: NextRequest) {
@@ -49,7 +103,7 @@ export async function GET(req: NextRequest) {
     // 3) Load ebook
     const { data: ebook, error: ebookErr } = await sb
       .from("ebooks")
-      .select("id, published, sample_url")
+      .select("*")
       .eq("id", ebookId)
       .maybeSingle();
     if (ebookErr) {
@@ -85,12 +139,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Not linked" }, { status: 403 });
     }
 
-    // 5) Stream the PDF from sample_url (treat as paid URL for now)
-    if (!ebook.sample_url) {
+    // 5) Stream the protected PDF from the best configured asset field.
+    const protectedPdfUrl = resolveProtectedPdfUrl(ebook as EbookAssetRow);
+    if (!protectedPdfUrl) {
       return NextResponse.json({ error: "No PDF URL configured for this ebook" }, { status: 404 });
     }
 
-    const upstream = await fetch(ebook.sample_url, { cache: "no-store" });
+    const upstream = await fetch(protectedPdfUrl, { cache: "no-store" });
     if (!upstream.ok) {
       return NextResponse.json(
         { error: `Upstream fetch failed`, status: upstream.status },

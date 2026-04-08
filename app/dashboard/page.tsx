@@ -6,7 +6,8 @@
 "use client";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
-export { runtime, preferredRegion } from "@/app/edge-no-rsc";
+export const runtime = "edge";
+export const preferredRegion = "auto";
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";

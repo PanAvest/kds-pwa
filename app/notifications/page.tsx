@@ -26,8 +26,13 @@ async function ensureFCM(){
 }
 
 export default function NotificationsPage(){
+  const pushAvailable = process.env.NEXT_PUBLIC_ENABLE_PUSH_NOTIFICATIONS === "true"
   const [enabled,setEnabled]=React.useState(false)
   async function enable(){
+    if (!pushAvailable) {
+      pushToast("Notifications are not available in this release")
+      return
+    }
     try{
       const perm = await Notification.requestPermission()
       if(perm !== "granted"){ pushToast("Permission denied"); return }
@@ -38,15 +43,28 @@ export default function NotificationsPage(){
     }catch(e:any){ pushToast(e.message || "Failed to enable") }
   }
   async function test(){
+    if (!pushAvailable) {
+      pushToast("Notifications are not available in this release")
+      return
+    }
     await fetch("/api/push/test", { method:"POST" })
     pushToast("Test notification requested")
   }
   return <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
     <h1 className="text-xl font-semibold">Web Push Notifications</h1>
-    <p className="text-[var(--color-text-muted)]">Enable push notifications to receive course updates.</p>
-    <div className="flex gap-2">
-      <Button onClick={enable} disabled={enabled}>{enabled?"Enabled":"Enable Notifications"}</Button>
-      <Button variant="outline" onClick={test}>Send Test</Button>
-    </div>
+    {pushAvailable ? (
+      <>
+        <p className="text-[var(--color-text-muted)]">Enable push notifications to receive course updates.</p>
+        <div className="flex gap-2">
+          <Button onClick={enable} disabled={enabled}>{enabled?"Enabled":"Enable Notifications"}</Button>
+          <Button variant="outline" onClick={test}>Send Test</Button>
+        </div>
+      </>
+    ) : (
+      <div className="rounded-xl border border-[color:var(--color-light)] bg-white p-4 text-sm text-[var(--color-text-muted)]">
+        Notifications are disabled for this launch build. Remove the UI only after the backend, web service worker,
+        APNs, and FCM configuration are fully implemented end to end.
+      </div>
+    )}
   </div>
 }

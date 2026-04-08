@@ -16,16 +16,42 @@
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="splash" translatesAutoresizingMaskIntoConstraints="NO" id="2qR-Og-hfm">
-                                <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="splash" translatesAutoresizingMaskIntoConstraints="NO" id="2qR-Og-hfm">
+                                <rect key="frame" x="147" y="295" width="120" height="120"/>
                             </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Knowledge Development Series" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="2" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="m9x-bq-SyC">
+                                <rect key="frame" x="53" y="435" width="308" height="68"/>
+                                <fontDescription key="fontDescription" type="system" weight="heavy" pointSize="28"/>
+                                <color key="textColor" red="0.17254901960784313" green="0.14509803921568629" blue="0.13333333333333333" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Powered by PanAvest International &amp; Partners" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="2" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="v3K-LQ-eYe">
+                                <rect key="frame" x="61" y="513" width="292" height="32"/>
+                                <fontDescription key="fontDescription" type="system" weight="medium" pointSize="13"/>
+                                <color key="textColor" red="0.42745098039215684" green="0.3843137254901961" blue="0.36470588235294116" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="BfP-L2-uWc">
+                                <rect key="frame" x="113" y="573" width="188" height="4"/>
+                                <color key="backgroundColor" red="0.84705882352941175" green="0.78431372549019607" blue="0.71764705882352942" alpha="0.45000000000000001" colorSpace="custom" customColorSpace="sRGB"/>
+                            </view>
                         </subviews>
-                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <color key="backgroundColor" red="0.96862745098039216" green="0.94901960784313721" blue="0.92549019607843142" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <constraint firstItem="2qR-Og-hfm" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="3u2-lb-EMJ"/>
-                            <constraint firstAttribute="bottom" secondItem="2qR-Og-hfm" secondAttribute="bottom" id="CqT-4Q-ZKr"/>
-                            <constraint firstItem="2qR-Og-hfm" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="GGZ-fY-Y5l"/>
-                            <constraint firstAttribute="trailing" secondItem="2qR-Og-hfm" secondAttribute="trailing" id="bFS-Ks-MQL"/>
+                            <constraint firstItem="2qR-Og-hfm" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="2BT-Fu-kA6"/>
+                            <constraint firstItem="m9x-bq-SyC" firstAttribute="top" secondItem="2qR-Og-hfm" secondAttribute="bottom" constant="20" id="6fg-tf-uP6"/>
+                            <constraint firstItem="v3K-LQ-eYe" firstAttribute="top" secondItem="m9x-bq-SyC" secondAttribute="bottom" constant="10" id="A1h-zx-vrM"/>
+                            <constraint firstItem="BfP-L2-uWc" firstAttribute="top" secondItem="v3K-LQ-eYe" secondAttribute="bottom" constant="28" id="F0w-q3-u5D"/>
+                            <constraint firstItem="BfP-L2-uWc" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="FhK-WN-v6p"/>
+                            <constraint firstItem="m9x-bq-SyC" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" constant="48" id="Gn8-tK-OCx"/>
+                            <constraint firstItem="2qR-Og-hfm" firstAttribute="width" secondItem="nil" secondAttribute="notAnAttribute" constant="120" id="Hiw-Hr-g0B"/>
+                            <constraint firstItem="2qR-Og-hfm" firstAttribute="height" secondItem="nil" secondAttribute="notAnAttribute" constant="120" id="J9R-Rt-CQ2"/>
+                            <constraint firstItem="m9x-bq-SyC" firstAttribute="trailing" secondItem="Ze5-6b-2t3" secondAttribute="trailing" constant="-48" id="LB2-Y1-jhN"/>
+                            <constraint firstItem="v3K-LQ-eYe" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" constant="56" id="M7K-kd-z0N"/>
+                            <constraint firstItem="2qR-Og-hfm" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-93" id="W2T-jW-6L0"/>
+                            <constraint firstItem="BfP-L2-uWc" firstAttribute="width" secondItem="nil" secondAttribute="notAnAttribute" constant="188" id="X2H-rS-LKl"/>
+                            <constraint firstItem="BfP-L2-uWc" firstAttribute="height" secondItem="nil" secondAttribute="notAnAttribute" constant="4" id="btF-Dl-XG2"/>
+                            <constraint firstItem="v3K-LQ-eYe" firstAttribute="trailing" secondItem="Ze5-6b-2t3" secondAttribute="trailing" constant="-56" id="m3w-Jo-kWW"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -35,8 +61,5 @@
     </scenes>
     <resources>
         <image name="splash" width="2732" height="2732"/>
-        <systemColor name="systemBackgroundColor">
-            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-        </systemColor>
     </resources>
 </document>

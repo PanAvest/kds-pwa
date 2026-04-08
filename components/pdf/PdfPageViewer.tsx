@@ -22,7 +22,10 @@ type PdfDocument = {
 };
 
 type PdfPage = {
-  getViewport: (opts: { scale: number }) => { width: number; height: number };
+  getViewport: (opts: { scale: number; rotation?: 0 | 90 | 180 | 270 }) => {
+    width: number;
+    height: number;
+  };
   render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => {
     promise: Promise<unknown>;
     cancel?: () => void;
@@ -250,7 +253,9 @@ export default function PdfPageViewer({ src, className }: Props) {
       const t = e.touches[0];
       touchStartRef.current = { x: t.clientX, y: t.clientY };
     } else if (e.touches.length === 2 && isFullscreen) {
-      const [t1, t2] = e.touches;
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      if (!t1 || !t2) return;
       const dx = t1.clientX - t2.clientX;
       const dy = t1.clientY - t2.clientY;
       const dist = Math.hypot(dx, dy);
@@ -282,7 +287,9 @@ export default function PdfPageViewer({ src, className }: Props) {
     if (!isFullscreen) return;
     if (pinchStartRef.current && e.touches.length === 2) {
       e.preventDefault();
-      const [t1, t2] = e.touches;
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      if (!t1 || !t2) return;
       const dx = t1.clientX - t2.clientX;
       const dy = t1.clientY - t2.clientY;
       const dist = Math.hypot(dx, dy);

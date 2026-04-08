@@ -1,10 +1,15 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { checkRateLimit } from "@/lib/rateLimit";
+
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
 const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
 const ELEVENLABS_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128";
+
+const TEXT_CHAR_LIMIT = 2500;
+const UPSTREAM_TIMEOUT_MS = 15000;
 
 const contentTypeForFormat = (format: string) => {
   if (format.startsWith("mp3_")) return "audio/mpeg";
@@ -15,11 +20,34 @@ const contentTypeForFormat = (format: string) => {
 
 export async function POST(req: Request) {
   try {
+    const rateLimit = checkRateLimit(req, "api:tts", {
+      limit: 15,
+      windowMs: 5 * 60 * 1000,
+    });
+    if (!rateLimit.ok) {
+      return Response.json(
+        { error: "Too many speech requests. Please retry shortly." },
+        {
+          status: 429,
+          headers: {
+            ...rateLimit.headers,
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+          },
+        }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const text = typeof body?.text === "string" ? body.text.trim() : "";
 
     if (!text) {
       return Response.json({ error: "Missing text" }, { status: 400 });
+    }
+    if (text.length > TEXT_CHAR_LIMIT) {
+      return Response.json(
+        { error: `Text too long. Limit is ${TEXT_CHAR_LIMIT} characters.` },
+        { status: 400, headers: rateLimit.headers }
+      );
     }
 
     if (!ELEVENLABS_API_KEY || !ELEVENLABS_VOICE_ID) {
@@ -46,6 +74,7 @@ export async function POST(req: Request) {
         model_id: ELEVENLABS_MODEL_ID,
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -63,6 +92,7 @@ export async function POST(req: Request) {
       headers: {
         "Content-Type": contentTypeForFormat(ELEVENLABS_OUTPUT_FORMAT),
         "Cache-Control": "no-store",
+        ...rateLimit.headers,
       },
     });
   } catch (error: any) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "edge";
+const UPSTREAM_TIMEOUT_MS = 15000;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -10,7 +11,7 @@ const CORS_HEADERS = {
 
 const MAIN_ORIGIN =
   process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN?.replace(/\/+$/, "") ||
-  "https://panavestkds.com";
+  "https://www.panavestkds.com";
 const FALLBACK_INTERACTIVE_BASE = "/interactive/ghie-business-ethics/";
 
 function cleanAssetPath(parts: string[] | undefined): string | null {
@@ -89,11 +90,23 @@ function createResponse(
   contentType: string,
   extraHeaders: Record<string, string>
 ) {
+  const lower = contentType.toLowerCase();
+  const cacheControl =
+    lower.includes("javascript") ||
+    lower.includes("css") ||
+    lower.startsWith("image/") ||
+    lower.startsWith("video/") ||
+    lower.startsWith("audio/") ||
+    lower.includes("font")
+      ? "public, s-maxage=604800, stale-while-revalidate=2592000"
+      : "public, s-maxage=86400, stale-while-revalidate=604800";
+
   return new Response(body, {
     status,
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": "no-store",
+      "Cache-Control": cacheControl,
+      Vary: "Referer",
       ...CORS_HEADERS,
       ...extraHeaders,
     },
@@ -143,6 +156,7 @@ export async function GET(
       const local = await fetch(localUrl.toString(), {
         headers: { "User-Agent": "KDS-PWA-Interactive-Asset-Proxy-Local" },
         redirect: "follow",
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       });
 
       if (local.ok) {
@@ -162,6 +176,7 @@ export async function GET(
       const upstream = await fetch(target.toString(), {
         headers: { "User-Agent": "KDS-PWA-Interactive-Asset-Proxy" },
         redirect: "follow",
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       });
 
       if (upstream.ok) {
@@ -181,7 +196,8 @@ export async function GET(
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store",
+          "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+          Vary: "Referer",
           ...CORS_HEADERS,
           "X-Interactive-Asset-Proxy": "1",
           "X-Interactive-Asset-Source": "generated",

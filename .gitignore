@@ -18,6 +18,8 @@
 *.local
 .env*
 !.env.example
+tsconfig.tsbuildinfo
+POLLINATIONS_API_KEY=*
 
 # vercel
 .vercel

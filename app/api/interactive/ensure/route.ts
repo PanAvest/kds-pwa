@@ -1,11 +1,15 @@
 // File: app/api/interactive/ensure/route.ts
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireInternalApiAccess } from "@/lib/serverSecurity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const denied = requireInternalApiAccess(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const courseId = body?.course_id;
@@ -40,7 +44,7 @@ export async function POST(req: Request) {
 
     if (ch?.[0]) chapterId = ch[0].id;
     else {
-      const { data: ins } = await admin
+      const { data: ins, error: chapterInsertError } = await admin
         .from("course_chapters")
         .insert({
           course_id: courseId,
@@ -49,6 +53,12 @@ export async function POST(req: Request) {
         })
         .select("id")
         .single();
+      if (chapterInsertError) {
+        throw new Error(chapterInsertError.message);
+      }
+      if (!ins?.id) {
+        throw new Error("Failed to create interactive chapter.");
+      }
       chapterId = ins.id;
     }
 
@@ -63,7 +73,7 @@ export async function POST(req: Request) {
     let slideId = null;
     if (sl?.[0]) slideId = sl[0].id;
     else {
-      const { data: ins } = await admin
+      const { data: ins, error: slideInsertError } = await admin
         .from("course_slides")
         .insert({
           chapter_id: chapterId,
@@ -73,6 +83,12 @@ export async function POST(req: Request) {
         })
         .select("id")
         .single();
+      if (slideInsertError) {
+        throw new Error(slideInsertError.message);
+      }
+      if (!ins?.id) {
+        throw new Error("Failed to create interactive slide.");
+      }
       slideId = ins.id;
     }
 

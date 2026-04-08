@@ -20,16 +20,43 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>KDSAppBaseURL</key>
+	<string>https://www.panavestkds.com</string>
+	<key>KDSMainSiteURL</key>
+	<string>https://www.panavestkds.com</string>
+	<key>KDSSupabaseAnonKey</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljdWp2cW1xd2FjcHlzeGpma3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3MDYyMDUsImV4cCI6MjA3NDI4MjIwNX0.0CQH78p_HKbITfBU_5rDy0KsCFBlb9VB31RfStltaL4</string>
+	<key>KDSSupabaseURL</key>
+	<string>https://icujvqmqwacpysxjfkxd.supabase.co</string>
+	<key>KDSPushNotificationsEnabled</key>
+	<false/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to unlock your saved KDS sign-in on this device.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>armv7</string>
 	</array>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UIStatusBarHidden</key>
 	<false/>
 	<key>UIStatusBarStyle</key>
@@ -37,6 +64,8 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

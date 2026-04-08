@@ -1,25 +1,50 @@
 // File: next.config.mjs
 import withPWA from "next-pwa";
-import runtimeCaching from "next-pwa/cache.js";
+import defaultRuntimeCaching from "next-pwa/cache.js";
 
 const isProd = process.env.NODE_ENV === "production";
+const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+  : null;
+const runtimeCaching = defaultRuntimeCaching.filter(
+  (entry) => entry?.options?.cacheName !== "apis"
+);
+const securityHeaders = [
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=63072000; includeSubDomains; preload",
+  },
+];
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+  poweredByHeader: false,
   images: {
     // External Supabase image URLs are already optimized enough for this app.
     // Disabling Next's optimizer avoids intermittent /_next/image 500s in PWA/mobile contexts.
     unoptimized: true,
-    remotePatterns: [
+    remotePatterns: supabaseHostname
+      ? [
+          {
+            protocol: "https",
+            hostname: supabaseHostname,
+            pathname: "/storage/v1/object/**",
+          },
+        ]
+      : [],
+  },
+  async headers() {
+    return [
       {
-        protocol: "https",
-        hostname: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname,
-        pathname: "/storage/v1/object/**",
+        source: "/:path*",
+        headers: securityHeaders,
       },
-    ],
+    ];
   },
 };
 

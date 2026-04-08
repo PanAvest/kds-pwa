@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
+import { normalizeInteractiveTarget } from "@/lib/interactiveProxy";
 
 export const runtime = "edge";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-};
+const UPSTREAM_TIMEOUT_MS = 15000;
 
 function injectBaseTag(html: string, baseHref: string): string {
   if (/<base\s/i.test(html)) return html;
@@ -16,42 +12,45 @@ function injectBaseTag(html: string, baseHref: string): string {
   return `<base href="${baseHref}">${html}`;
 }
 
+function cacheHeaderForContentType(contentType: string) {
+  if (contentType.toLowerCase().includes("text/html")) {
+    return "public, s-maxage=600, stale-while-revalidate=86400";
+  }
+  return "public, s-maxage=86400, stale-while-revalidate=604800";
+}
+
 export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+  return new Response(null, { status: 204 });
 }
 
 export async function GET(req: Request) {
   try {
     const requestUrl = new URL(req.url);
     const { searchParams } = requestUrl;
-    let path = searchParams.get("path") || "";
+    const rawPath = searchParams.get("path");
 
-    if (!path) {
+    if (!rawPath?.trim()) {
       return NextResponse.json({ error: "path required" }, { status: 400 });
     }
 
-    // Trim stray whitespace
-    path = path.trim();
-
-    const mainOrigin =
-      process.env.NEXT_PUBLIC_MAIN_SITE_ORIGIN?.replace(/\/+$/, "") ||
-      "https://panavestkds.com";
-
-    // If "path" is a full URL, use it directly
-    let targetUrl: string;
-    if (/^https?:\/\//i.test(path)) {
-      targetUrl = path;
-    } else {
-      // Treat as relative to mainOrigin
-      if (!path.startsWith("/")) {
-        path = `/${path}`;
-      }
-      targetUrl = `${mainOrigin}${path}`;
+    let normalized;
+    try {
+      normalized = normalizeInteractiveTarget(rawPath);
+    } catch (error) {
+      return NextResponse.json(
+        { error: (error as Error).message },
+        { status: 400 }
+      );
     }
 
-    const upstream = await fetch(targetUrl, {
+    if (!normalized.absolute) {
+      return NextResponse.json({ error: "path required" }, { status: 400 });
+    }
+
+    const upstream = await fetch(normalized.absolute, {
       headers: { "User-Agent": "KDS-PWA-Proxy" },
       redirect: "follow",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 
     const contentType =
@@ -71,10 +70,9 @@ export async function GET(req: Request) {
         status: upstream.status,
         headers: {
           "Content-Type": contentType,
-          "Cache-Control": "no-store",
-          ...CORS_HEADERS,
+          "Cache-Control": cacheHeaderForContentType(contentType),
           "X-PWA-Proxy": "1",
-          "X-PWA-Proxy-Upstream": targetUrl,
+          "X-PWA-Proxy-Upstream": normalized.absolute,
           "X-PWA-Proxy-Base": localAssetBaseHref,
           "X-PWA-Proxy-Upstream-BasePath": upstreamBasePath,
         },
@@ -85,10 +83,9 @@ export async function GET(req: Request) {
       status: upstream.status,
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "no-store",
-        ...CORS_HEADERS,
+        "Cache-Control": cacheHeaderForContentType(contentType),
         "X-PWA-Proxy": "1",
-        "X-PWA-Proxy-Upstream": targetUrl,
+        "X-PWA-Proxy-Upstream": normalized.absolute,
       },
     });
   } catch (e) {
