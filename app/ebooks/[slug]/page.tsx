@@ -168,10 +168,10 @@ export default function EbookDetailPage() {
         markOnline();
       } catch (e) {
         setErr((e as Error).message);
-        markOffline();
+        flagOfflineFromError(e);
       }
     })();
-  }, [slug, markOffline, markOnline]);
+  }, [slug, flagOfflineFromError, markOnline]);
 
   /** Ownership check */
   useEffect(() => {
@@ -510,6 +510,17 @@ export default function EbookDetailPage() {
                       Go to Dashboard
                     </Link>
                   </>
+                )}
+
+                {/* Buy a printed copy — available in every state */}
+                {own.kind !== "loading" && slug && (
+                  <Link
+                    href={`/ebooks/${encodeURIComponent(slug)}/physical`}
+                    className="inline-flex items-center justify-center rounded-lg border-2 px-5 py-3 font-semibold w-full sm:w-auto hover:bg-[color:var(--color-light)]/40"
+                    style={{ borderColor: "var(--color-accent-red)", color: "var(--color-accent-red)" }}
+                  >
+                    Buy a physical copy
+                  </Link>
                 )}
               </div>
 

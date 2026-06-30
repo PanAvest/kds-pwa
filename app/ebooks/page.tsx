@@ -246,6 +246,18 @@ export default function Ebooks() {
                       : `GH₵ ${(b.price_cents / 100).toFixed(2)}`}
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    router.push(`/ebooks/${encodeURIComponent(b.slug)}/physical`);
+                  }}
+                  className="mt-2 inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                  style={{ borderColor: "var(--color-accent-red)", color: "var(--color-accent-red)" }}
+                >
+                  Buy printed copy
+                </button>
               </div>
             </Link>
           ))}
